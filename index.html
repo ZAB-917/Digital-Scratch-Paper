@@ -2,395 +2,811 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Private, temporary whiteboard and notepad.">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
+
+  <meta
+    name="description"
+    content="Private, temporary whiteboard and notepad."
+  >
+
   <title>Online Whiteboard and Notepad</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <header class="topbar">
-    <div class="brand">Online Whiteboard and Notepad</div>
+<header class="topbar">
 
-    <div class="top-actions">
-      <span class="privacy">Private · temporary · no autosave</span>
-      <button id="downloadAll" class="primary">Download Work</button>
-      <button id="clearAll" class="danger">Clear All</button>
+  <div class="brand">
+    Online Whiteboard and Notepad
+  </div>
+
+  <div class="top-actions">
+
+    <span class="privacy">
+      Private · temporary · no autosave
+    </span>
+
+    <button
+      id="downloadAll"
+      class="primary"
+    >
+      Download Work
+    </button>
+
+    <button
+      id="clearAll"
+      class="danger"
+    >
+      Clear All
+    </button>
+
+  </div>
+
+</header>
+
+
+<nav
+  class="tabs"
+  aria-label="Workspace"
+>
+
+  <button
+    class="tab active"
+    data-tab="whiteboard"
+  >
+    Whiteboard
+  </button>
+
+  <button
+    class="tab"
+    data-tab="notepad"
+  >
+    Notepad
+  </button>
+
+  <button
+    class="tab"
+    data-tab="split"
+  >
+    Split View
+  </button>
+
+  <button
+    class="tab"
+    data-tab="blankSplit"
+  >
+    Blank Split View
+  </button>
+
+</nav>
+
+
+<main id="mainWorkspace">
+
+
+  <!-- =====================================================
+       MAIN WHITEBOARD
+       ===================================================== -->
+
+  <section
+    id="whiteboard"
+    class="panel active-panel"
+  >
+
+    <div class="toolbar">
+
+      <div class="tool-group">
+
+        <button
+          class="tool active"
+          data-workspace="main"
+          data-tool="select"
+          title="Select and move objects"
+        >
+          Select
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="pen"
+          title="Freehand drawing"
+        >
+          Pen
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="eraser"
+          title="Erase freehand strokes"
+        >
+          Eraser
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="node"
+          title="Place a graph node"
+        >
+          Node
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="edge"
+          title="Create an undirected edge"
+        >
+          Edge
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="directed"
+          title="Create a directed edge"
+        >
+          Directed Edge
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="weight"
+          title="Add or edit an edge weight"
+        >
+          Weight
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="text"
+          title="Place text"
+        >
+          Text
+        </button>
+
+      </div>
+
+
+      <div class="tool-group compact">
+
+        <label>
+          Pen
+          <input
+            id="strokeColor"
+            type="color"
+            value="#111827"
+          >
+        </label>
+
+        <label>
+          Size
+          <input
+            id="strokeSize"
+            type="range"
+            min="1"
+            max="12"
+            value="3"
+          >
+        </label>
+
+        <button id="undo">
+          Undo
+        </button>
+
+        <button id="redo">
+          Redo
+        </button>
+
+        <button id="deleteSelected">
+          Delete
+        </button>
+
+        <button
+          id="clearBoard"
+          class="danger"
+        >
+          Clear Board
+        </button>
+
+      </div>
+
+
+      <div class="help">
+
+        <span id="toolHelp">
+          Select and move objects.
+        </span>
+
+        <span>
+          Tip: use Node + Edge for graph diagrams.
+        </span>
+
+      </div>
+
     </div>
-  </header>
 
 
-  <nav class="tabs" aria-label="Workspace">
-    <button class="tab active" data-tab="whiteboard">
-      Whiteboard
-    </button>
-
-    <button class="tab" data-tab="notepad">
-      Notepad
-    </button>
-  </nav>
-
-
-  <main>
-
-    <!-- =========================
-         WHITEBOARD
-    ========================== -->
-
-    <section
-      id="whiteboard"
-      class="panel active-panel"
+    <div
+      id="boardWrap"
+      class="board-wrap"
     >
 
-      <div class="toolbar">
-
-        <div class="tool-group">
-
-          <button
-            class="tool active"
-            data-tool="select"
-            title="Select and move objects"
-          >
-            Select
-          </button>
-
-          <button
-            class="tool"
-            data-tool="pen"
-            title="Freehand drawing"
-          >
-            Pen
-          </button>
-
-          <button
-            class="tool"
-            data-tool="eraser"
-            title="Erase freehand strokes"
-          >
-            Eraser
-          </button>
-
-          <button
-            class="tool"
-            data-tool="node"
-            title="Place a graph node"
-          >
-            Node
-          </button>
-
-          <button
-            class="tool"
-            data-tool="edge"
-            title="Create an edge between two nodes"
-          >
-            Edge
-          </button>
-
-          <button
-            class="tool"
-            data-tool="directed"
-            title="Create a directed edge"
-          >
-            Directed Edge
-          </button>
-
-          <button
-            class="tool"
-            data-tool="weight"
-            title="Add or edit an edge weight"
-          >
-            Weight
-          </button>
-
-          <button
-            class="tool"
-            data-tool="text"
-            title="Place text"
-          >
-            Text
-          </button>
-
-        </div>
-
-
-        <div class="tool-group compact">
-
-          <label>
-            Pen
-            <input
-              id="strokeColor"
-              type="color"
-              value="#111827"
-            >
-          </label>
-
-          <label>
-            Size
-            <input
-              id="strokeSize"
-              type="range"
-              min="1"
-              max="12"
-              value="3"
-            >
-          </label>
-
-          <button id="undo">Undo</button>
-          <button id="redo">Redo</button>
-          <button id="deleteSelected">Delete</button>
-
-          <button
-            id="clearBoard"
-            class="danger"
-          >
-            Clear Board
-          </button>
-
-        </div>
-
-
-        <div class="help">
-
-          <span id="toolHelp">
-            Select and move objects.
-          </span>
-
-          <span>
-            Tip: use Node + Edge for graph diagrams.
-          </span>
-
-        </div>
-
-      </div>
-
+      <canvas
+        id="board"
+        aria-label="Whiteboard"
+      ></canvas>
 
       <div
-        id="boardWrap"
-        class="board-wrap"
-      >
-
-        <canvas
-          id="board"
-          aria-label="Whiteboard"
-        ></canvas>
-
-
-        <!-- Text editor -->
-
-        <div
-          id="textEditor"
-          class="floating-editor"
-          hidden
-        >
-
-          <input
-            id="textInput"
-            type="text"
-            placeholder="Enter text"
-          >
-
-          <button id="textAdd">
-            Add
-          </button>
-
-          <button id="textCancel">
-            Cancel
-          </button>
-
-        </div>
-
-
-        <!-- Node label editor -->
-
-        <div
-          id="nodeEditor"
-          class="floating-editor"
-          hidden
-        >
-
-          <input
-            id="nodeInput"
-            type="text"
-            placeholder="Node label"
-          >
-
-          <button id="nodeAdd">
-            Apply
-          </button>
-
-          <button id="nodeCancel">
-            Cancel
-          </button>
-
-        </div>
-
-
-        <!-- Weight editor -->
-
-        <div
-          id="weightEditor"
-          class="floating-editor"
-          hidden
-        >
-
-          <input
-            id="weightInput"
-            type="text"
-            inputmode="text"
-            placeholder="Weight"
-          >
-
-          <button id="weightAdd">
-            Apply
-          </button>
-
-          <button id="weightCancel">
-            Cancel
-          </button>
-
-        </div>
-
-
-        <!-- In-page confirmation -->
-
-        <div
-          id="confirmEditor"
-          class="confirm-editor"
-          hidden
-        >
-
-          <span id="confirmMessage"></span>
-
-          <button
-            id="confirmYes"
-            class="danger"
-          >
-            Confirm
-          </button>
-
-          <button id="confirmNo">
-            Cancel
-          </button>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-
-    <!-- =========================
-         NOTEPAD
-    ========================== -->
-
-    <section
-      id="notepad"
-      class="panel"
-    >
-
-      <div class="notepad-toolbar">
-
-        <span>Scratch notes</span>
-
-        <div class="notepad-actions">
-
-          <button id="insertTable">
-            Insert Table
-          </button>
-
-          <button
-            id="clearNotes"
-            class="danger"
-          >
-            Clear Notes
-          </button>
-
-        </div>
-
-      </div>
-
-
-      <div
-        id="notes"
-        class="notes-editor"
-        contenteditable="true"
-        spellcheck="false"
-        role="textbox"
-        aria-label="Scratch notes"
-        data-placeholder="Type your notes here..."
-      ></div>
-
-
-      <!-- Table insertion control -->
-
-      <div
-        id="tableEditor"
-        class="table-editor"
+        id="textEditor"
+        class="floating-editor"
         hidden
       >
 
-        <div class="table-editor-title">
+        <input
+          id="textInput"
+          type="text"
+          placeholder="Enter text"
+        >
+
+        <button id="textAdd">
+          Add
+        </button>
+
+        <button id="textCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="nodeEditor"
+        class="floating-editor"
+        hidden
+      >
+
+        <input
+          id="nodeInput"
+          type="text"
+          placeholder="Node label"
+        >
+
+        <button id="nodeAdd">
+          Apply
+        </button>
+
+        <button id="nodeCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="weightEditor"
+        class="floating-editor"
+        hidden
+      >
+
+        <input
+          id="weightInput"
+          type="text"
+          inputmode="text"
+          placeholder="Weight"
+        >
+
+        <button id="weightAdd">
+          Apply
+        </button>
+
+        <button id="weightCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="confirmEditor"
+        class="confirm-editor"
+        hidden
+      >
+
+        <span id="confirmMessage"></span>
+
+        <button
+          id="confirmYes"
+          class="danger"
+        >
+          Confirm
+        </button>
+
+        <button id="confirmNo">
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
+       MAIN NOTEPAD
+       ===================================================== -->
+
+  <section
+    id="notepad"
+    class="panel"
+  >
+
+    <div class="notepad-toolbar">
+
+      <span>
+        Scratch notes
+      </span>
+
+      <div class="notepad-actions">
+
+        <button id="insertTable">
           Insert Table
-        </div>
+        </button>
 
-        <div class="table-controls">
+        <button
+          id="clearNotes"
+          class="danger"
+        >
+          Clear Notes
+        </button>
 
-          <label>
-            Rows
-            <input
-              id="tableRows"
-              type="number"
-              min="1"
-              max="30"
-              value="3"
-            >
-          </label>
+      </div>
 
-          <label>
-            Columns
-            <input
-              id="tableColumns"
-              type="number"
-              min="1"
-              max="20"
-              value="3"
-            >
-          </label>
+    </div>
 
-        </div>
 
-        <div class="table-editor-actions">
+    <div
+      id="notes"
+      class="notes-editor"
+      contenteditable="true"
+      spellcheck="false"
+      role="textbox"
+      aria-label="Scratch notes"
+      data-placeholder="Type your notes here..."
+    ></div>
 
-          <button
-            id="tableInsert"
-            class="primary"
+
+    <div
+      id="tableEditor"
+      class="table-editor"
+      hidden
+    >
+
+      <div class="table-editor-title">
+        Insert Table
+      </div>
+
+      <div class="table-controls">
+
+        <label>
+          Rows
+          <input
+            id="tableRows"
+            type="number"
+            min="1"
+            max="30"
+            value="3"
           >
-            Insert
-          </button>
+        </label>
 
-          <button id="tableCancel">
-            Cancel
-          </button>
+        <label>
+          Columns
+          <input
+            id="tableColumns"
+            type="number"
+            min="1"
+            max="20"
+            value="3"
+          >
+        </label>
+
+      </div>
+
+      <div class="table-editor-actions">
+
+        <button
+          id="tableInsert"
+          class="primary"
+        >
+          Insert
+        </button>
+
+        <button id="tableCancel">
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
+       EXISTING WORK SPLIT VIEW
+       ===================================================== -->
+
+  <section
+    id="split"
+    class="panel split-panel"
+  >
+
+    <div class="split-workspace">
+
+      <div class="split-half split-whiteboard">
+
+        <div class="split-title">
+          <strong>Whiteboard</strong>
+          <span>Existing work</span>
+        </div>
+
+        <div
+          id="splitBoardWrap"
+          class="board-wrap"
+        >
+
+          <canvas
+            id="splitBoard"
+            aria-label="Split view whiteboard"
+          ></canvas>
 
         </div>
 
       </div>
 
-    </section>
 
-  </main>
-
-
-  <footer>
-    <span>
-      No accounts · no collaboration · no browser storage · no server-side work storage
-    </span>
-  </footer>
+      <div
+        class="split-divider"
+        aria-label="Resize split view"
+        tabindex="0"
+      ></div>
 
 
-  <script src="app.js"></script>
+      <div class="split-half split-notepad">
+
+        <div class="split-title">
+
+          <strong>Notepad</strong>
+          <span>Existing work</span>
+
+          <div class="split-note-actions">
+
+            <button id="splitInsertTable">
+              Insert Table
+            </button>
+
+            <button
+              id="splitClearNotes"
+              class="danger"
+            >
+              Clear
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="splitNotes"
+          class="notes-editor"
+          contenteditable="true"
+          spellcheck="false"
+          role="textbox"
+          aria-label="Split view notes"
+          data-placeholder="Type your notes here..."
+        ></div>
+
+
+        <div
+          id="splitTableEditor"
+          class="table-editor"
+          hidden
+        >
+
+          <div class="table-editor-title">
+            Insert Table
+          </div>
+
+          <div class="table-controls">
+
+            <label>
+              Rows
+              <input
+                id="splitTableRows"
+                type="number"
+                min="1"
+                max="30"
+                value="3"
+              >
+            </label>
+
+            <label>
+              Columns
+              <input
+                id="splitTableColumns"
+                type="number"
+                min="1"
+                max="20"
+                value="3"
+              >
+            </label>
+
+          </div>
+
+          <div class="table-editor-actions">
+
+            <button
+              id="splitTableInsert"
+              class="primary"
+            >
+              Insert
+            </button>
+
+            <button id="splitTableCancel">
+              Cancel
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
+       BLANK SPLIT VIEW
+       ===================================================== -->
+
+  <section
+    id="blankSplit"
+    class="panel split-panel"
+  >
+
+    <div class="split-workspace blank-workspace">
+
+      <div class="split-half split-whiteboard">
+
+        <div class="split-title">
+
+          <strong>Blank Whiteboard</strong>
+
+          <span>
+            Separate workspace
+          </span>
+
+        </div>
+
+
+        <div
+          id="blankBoardWrap"
+          class="board-wrap"
+        >
+
+          <canvas
+            id="blankBoard"
+            aria-label="Blank split view whiteboard"
+          ></canvas>
+
+
+          <div
+            id="blankTextEditor"
+            class="floating-editor"
+            hidden
+          >
+
+            <input
+              id="blankTextInput"
+              type="text"
+              placeholder="Enter text"
+            >
+
+            <button id="blankTextAdd">
+              Add
+            </button>
+
+            <button id="blankTextCancel">
+              Cancel
+            </button>
+
+          </div>
+
+
+          <div
+            id="blankNodeEditor"
+            class="floating-editor"
+            hidden
+          >
+
+            <input
+              id="blankNodeInput"
+              type="text"
+              placeholder="Node label"
+            >
+
+            <button id="blankNodeAdd">
+              Apply
+            </button>
+
+            <button id="blankNodeCancel">
+              Cancel
+            </button>
+
+          </div>
+
+
+          <div
+            id="blankWeightEditor"
+            class="floating-editor"
+            hidden
+          >
+
+            <input
+              id="blankWeightInput"
+              type="text"
+              placeholder="Weight"
+            >
+
+            <button id="blankWeightAdd">
+              Apply
+            </button>
+
+            <button id="blankWeightCancel">
+              Cancel
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="split-divider"
+        aria-label="Resize blank split view"
+        tabindex="0"
+      ></div>
+
+
+      <div class="split-half split-notepad">
+
+        <div class="split-title">
+
+          <strong>Blank Notepad</strong>
+
+          <span>
+            Separate workspace
+          </span>
+
+          <div class="split-note-actions">
+
+            <button id="blankInsertTable">
+              Insert Table
+            </button>
+
+            <button
+              id="blankClearNotes"
+              class="danger"
+            >
+              Clear
+            </button>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="blankNotes"
+          class="notes-editor"
+          contenteditable="true"
+          spellcheck="false"
+          role="textbox"
+          aria-label="Blank split view notes"
+          data-placeholder="Type your notes here..."
+        ></div>
+
+
+        <div
+          id="blankTableEditor"
+          class="table-editor"
+          hidden
+        >
+
+          <div class="table-editor-title">
+            Insert Table
+          </div>
+
+          <div class="table-controls">
+
+            <label>
+              Rows
+              <input
+                id="blankTableRows"
+                type="number"
+                min="1"
+                max="30"
+                value="3"
+              >
+            </label>
+
+            <label>
+              Columns
+              <input
+                id="blankTableColumns"
+                type="number"
+                min="1"
+                max="20"
+                value="3"
+              >
+            </label>
+
+          </div>
+
+          <div class="table-editor-actions">
+
+            <button
+              id="blankTableInsert"
+              class="primary"
+            >
+              Insert
+            </button>
+
+            <button id="blankTableCancel">
+              Cancel
+            </button>
+
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+</main>
+
+
+<footer>
+
+  <span>
+    No accounts · no collaboration · no browser storage · no server-side work storage
+  </span>
+
+</footer>
+
+
+<script src="app.js"></script>
 
 </body>
 </html>
