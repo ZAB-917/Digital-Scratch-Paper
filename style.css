@@ -19,11 +19,19 @@ body {
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
   color: var(--text);
   background: var(--bg);
+
   display: flex;
   flex-direction: column;
+
   overflow: hidden;
 }
 
@@ -37,8 +45,11 @@ button {
   border: 1px solid var(--line);
   background: white;
   color: var(--text);
+
   border-radius: 7px;
+
   padding: 7px 10px;
+
   cursor: pointer;
 }
 
@@ -51,14 +62,24 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+
+/* =================================
+   TOP BAR
+================================= */
+
 .topbar {
   min-height: 58px;
+
   padding: 10px 16px;
+
   background: var(--panel);
+
   border-bottom: 1px solid var(--line);
+
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   gap: 16px;
 }
 
@@ -92,27 +113,46 @@ button:focus-visible {
   color: var(--danger);
 }
 
+
+/* =================================
+   TABS
+================================= */
+
 .tabs {
   display: flex;
+
   gap: 2px;
+
   padding: 0 16px;
+
   background: white;
+
   border-bottom: 1px solid var(--line);
 }
 
 .tab {
   border: 0;
   border-radius: 0;
+
   padding: 11px 18px;
+
   background: transparent;
+
   border-bottom: 3px solid transparent;
 }
 
 .tab.active {
   border-bottom-color: var(--accent);
+
   font-weight: 700;
+
   color: var(--accent);
 }
+
+
+/* =================================
+   MAIN
+================================= */
 
 main {
   flex: 1;
@@ -129,16 +169,26 @@ main {
   flex-direction: column;
 }
 
+
+/* =================================
+   WHITEBOARD TOOLBAR
+================================= */
+
 .toolbar {
   background: white;
+
   border-bottom: 1px solid var(--line);
+
   padding: 8px 10px;
 }
 
 .tool-group {
   display: flex;
+
   align-items: center;
+
   gap: 5px;
+
   flex-wrap: wrap;
 }
 
@@ -148,58 +198,91 @@ main {
 
 .tool.active {
   background: #dbeafe;
+
   color: #1d4ed8;
+
   border-color: #93c5fd;
+
   font-weight: 700;
 }
 
 .compact label {
   display: flex;
+
   align-items: center;
+
   gap: 4px;
+
   font-size: 13px;
 }
 
 .help {
   margin-top: 7px;
+
   font-size: 12px;
+
   color: var(--muted);
+
   display: flex;
+
   gap: 18px;
+
   flex-wrap: wrap;
 }
 
+
+/* =================================
+   WHITEBOARD
+================================= */
+
 .board-wrap {
   flex: 1;
+
   min-height: 0;
+
   position: relative;
+
   background: white;
+
   overflow: hidden;
 }
 
 #board {
   width: 100%;
   height: 100%;
+
   display: block;
+
   cursor: crosshair;
+
   touch-action: none;
 }
 
 
-/* ---------------------------------
-   In-page editors
---------------------------------- */
+/* =================================
+   WHITEBOARD EDITORS
+================================= */
 
 .floating-editor {
   position: absolute;
+
   display: flex;
+
   align-items: center;
+
   gap: 5px;
+
   padding: 6px;
+
   background: white;
+
   border: 1px solid var(--line);
+
   border-radius: 8px;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, .15);
+
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, .15);
+
   z-index: 20;
 }
 
@@ -209,39 +292,52 @@ main {
 
 .floating-editor input {
   width: 150px;
+
   padding: 6px 8px;
+
   border: 1px solid var(--line);
+
   border-radius: 5px;
+
   outline: none;
 }
 
 .floating-editor input:focus {
   border-color: #93c5fd;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, .12);
 }
 
 
-/* ---------------------------------
-   In-page confirmation
---------------------------------- */
+/* =================================
+   CONFIRMATION
+================================= */
 
 .confirm-editor {
   position: absolute;
+
   left: 50%;
   top: 50%;
+
   transform: translate(-50%, -50%);
 
   display: flex;
+
   align-items: center;
+
   gap: 8px;
 
   padding: 12px 14px;
 
   background: white;
+
   border: 1px solid var(--line);
+
   border-radius: 9px;
 
-  box-shadow: 0 8px 30px rgba(0, 0, 0, .18);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, .18);
 
   z-index: 30;
 }
@@ -252,57 +348,227 @@ main {
 
 #confirmMessage {
   margin-right: 4px;
+
   font-size: 14px;
 }
 
 
-/* ---------------------------------
-   Notepad
---------------------------------- */
+/* =================================
+   NOTEPAD TOOLBAR
+================================= */
 
 .notepad-toolbar {
   padding: 9px 12px;
+
   background: white;
+
   border-bottom: 1px solid var(--line);
+
   display: flex;
+
   justify-content: space-between;
+
+  align-items: center;
 }
 
-#notes {
+.notepad-actions {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+}
+
+
+/* =================================
+   NOTEPAD EDITOR
+================================= */
+
+.notes-editor {
   flex: 1;
+
   width: 100%;
+
   min-height: 0;
-  resize: none;
-  border: 0;
-  outline: 0;
-  padding: 24px;
-  font: 16px/1.55 ui-monospace,
-       SFMono-Regular,
-       Menlo,
-       Consolas,
-       monospace;
-  background: white;
+
   overflow-y: auto;
+
+  padding: 24px;
+
+  background: white;
+
+  outline: none;
+
+  font:
+    16px/1.55
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+
+  white-space: pre-wrap;
+
+  overflow-wrap: break-word;
 }
 
 
-/* ---------------------------------
-   Footer
---------------------------------- */
+/* Placeholder */
+
+.notes-editor:empty::before {
+  content: attr(data-placeholder);
+
+  color: #98a2b3;
+
+  pointer-events: none;
+}
+
+
+/* =================================
+   TABLES IN NOTEPAD
+================================= */
+
+.notes-editor table {
+  border-collapse: collapse;
+
+  margin: 12px 0;
+
+  font:
+    15px/1.4
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+
+  background: white;
+}
+
+.notes-editor td {
+  min-width: 90px;
+
+  height: 32px;
+
+  border: 1px solid #7b8794;
+
+  padding: 5px 8px;
+
+  vertical-align: top;
+
+  text-align: left;
+
+  outline: none;
+}
+
+.notes-editor td:focus {
+  background: #f8fbff;
+
+  box-shadow:
+    inset 0 0 0 2px #93c5fd;
+}
+
+.notes-editor td:empty::before {
+  content: "\00a0";
+}
+
+
+/* =================================
+   TABLE INSERT PANEL
+================================= */
+
+.table-editor {
+  position: absolute;
+
+  top: 58px;
+  right: 14px;
+
+  width: 240px;
+
+  padding: 14px;
+
+  background: white;
+
+  border: 1px solid var(--line);
+
+  border-radius: 9px;
+
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, .16);
+
+  z-index: 40;
+}
+
+.table-editor[hidden] {
+  display: none !important;
+}
+
+.table-editor-title {
+  font-weight: 700;
+
+  margin-bottom: 12px;
+}
+
+.table-controls {
+  display: flex;
+
+  gap: 12px;
+
+  margin-bottom: 14px;
+}
+
+.table-controls label {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+
+  font-size: 13px;
+
+  flex: 1;
+}
+
+.table-controls input {
+  width: 100%;
+
+  padding: 6px 7px;
+
+  border: 1px solid var(--line);
+
+  border-radius: 5px;
+}
+
+.table-editor-actions {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 6px;
+}
+
+
+/* =================================
+   FOOTER
+================================= */
 
 footer {
   padding: 6px 12px;
+
   background: white;
+
   border-top: 1px solid var(--line);
+
   color: var(--muted);
+
   font-size: 11px;
+
   text-align: center;
 }
 
 
-/* ---------------------------------
-   Mobile
---------------------------------- */
+/* =================================
+   MOBILE
+================================= */
 
 @media (max-width: 700px) {
 
@@ -320,16 +586,28 @@ footer {
 
   .toolbar {
     max-height: 210px;
+
     overflow: auto;
   }
 
-  .floating-editor {
-    max-width: calc(100% - 20px);
+  .notepad-toolbar {
+    flex-wrap: wrap;
+
+    gap: 8px;
   }
 
-  .confirm-editor {
-    max-width: calc(100% - 20px);
-    flex-wrap: wrap;
-    justify-content: center;
+  .table-editor {
+    right: 8px;
+    left: 8px;
+
+    width: auto;
+  }
+
+  .notes-editor {
+    padding: 16px;
+  }
+
+  .notes-editor td {
+    min-width: 75px;
   }
 }
