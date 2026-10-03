@@ -105,6 +105,8 @@ main { flex: 1; min-height: 0; }
   padding: 24px;
   font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: white;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 footer {
   padding: 6px 12px;
