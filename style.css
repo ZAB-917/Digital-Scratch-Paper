@@ -62,6 +62,11 @@ button:focus-visible {
   outline-offset: 1px;
 }
 
+
+/* =========================================================
+   TOP BAR
+   ========================================================= */
+
 .topbar {
   min-height: 58px;
 
@@ -72,10 +77,14 @@ button:focus-visible {
   border-bottom: 1px solid var(--line);
 
   display: flex;
+
   align-items: center;
+
   justify-content: space-between;
 
   gap: 16px;
+
+  flex-shrink: 0;
 }
 
 .brand {
@@ -85,7 +94,9 @@ button:focus-visible {
 
 .top-actions {
   display: flex;
+
   align-items: center;
+
   gap: 8px;
 }
 
@@ -108,8 +119,14 @@ button:focus-visible {
   color: var(--danger);
 }
 
+
+/* =========================================================
+   TABS
+   ========================================================= */
+
 .tabs {
   display: flex;
+
   gap: 2px;
 
   padding: 0 16px;
@@ -119,10 +136,13 @@ button:focus-visible {
   border-bottom: 1px solid var(--line);
 
   overflow-x: auto;
+
+  flex-shrink: 0;
 }
 
 .tab {
   border: 0;
+
   border-radius: 0;
 
   padding: 11px 18px;
@@ -134,6 +154,10 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.tab:hover {
+  background: #f8fafc;
+}
+
 .tab.active {
   border-bottom-color: var(--accent);
 
@@ -141,6 +165,11 @@ button:focus-visible {
 
   color: var(--accent);
 }
+
+
+/* =========================================================
+   MAIN
+   ========================================================= */
 
 main {
   flex: 1;
@@ -163,6 +192,49 @@ main {
   display: flex;
 
   flex-direction: column;
+}
+
+
+/* =========================================================
+   EXISTING WORK SPLIT VIEW
+   ========================================================= */
+
+/*
+   IMPORTANT:
+
+   Split View does NOT have its own whiteboard or notepad.
+
+   It simply displays the SAME #whiteboard and #notepad
+   side-by-side.
+
+   Therefore everything the student writes is automatically
+   visible in both the regular tabs and Split View.
+*/
+
+main.existing-split {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1fr);
+
+  min-height: 0;
+}
+
+main.existing-split #whiteboard,
+main.existing-split #notepad {
+  display: flex;
+
+  flex-direction: column;
+
+  height: 100%;
+
+  min-width: 0;
+  min-height: 0;
+}
+
+main.existing-split #whiteboard {
+  border-right: 1px solid var(--line);
 }
 
 
@@ -243,7 +315,6 @@ main {
 }
 
 #board,
-#splitBoard,
 #blankBoard {
   width: 100%;
   height: 100%;
@@ -400,6 +471,8 @@ main {
   white-space: pre-wrap;
 
   overflow-wrap: break-word;
+
+  -webkit-overflow-scrolling: touch;
 }
 
 .notes-editor:empty::before {
@@ -530,7 +603,7 @@ main {
 
 
 /* =========================================================
-   SPLIT VIEWS
+   BLANK SPLIT VIEW
    ========================================================= */
 
 .split-panel {
@@ -580,22 +653,6 @@ main {
   border-left: 1px solid #d6dbe1;
 
   border-right: 1px solid #d6dbe1;
-
-  cursor: col-resize;
-
-  position: relative;
-
-  z-index: 10;
-}
-
-.split-divider:hover {
-  background: #cbd5e1;
-}
-
-.split-divider:focus-visible {
-  outline: 3px solid #93c5fd;
-
-  outline-offset: -2px;
 }
 
 .split-title {
@@ -630,7 +687,13 @@ main {
   gap: 5px;
 }
 
-.split-notepad .notes-editor {
+.blank-toolbar {
+  max-height: 170px;
+
+  overflow-y: auto;
+}
+
+.blank-workspace .notes-editor {
   flex: 1;
 }
 
@@ -657,7 +720,7 @@ footer {
 
 
 /* =========================================================
-   MOBILE
+   MOBILE / TOUCH
    ========================================================= */
 
 @media (max-width: 800px) {
@@ -678,6 +741,10 @@ footer {
     max-height: 210px;
 
     overflow: auto;
+  }
+
+  button {
+    min-height: 40px;
   }
 
   .notepad-toolbar {
@@ -702,7 +769,30 @@ footer {
   }
 
   /*
-    On small screens, the split views stack vertically.
+    Existing work Split View stacks on smaller screens.
+  */
+
+  main.existing-split {
+    display: flex;
+
+    flex-direction: column;
+  }
+
+  main.existing-split #whiteboard,
+  main.existing-split #notepad {
+    height: 50%;
+
+    flex: 1;
+
+    border-right: 0;
+  }
+
+  main.existing-split #whiteboard {
+    border-bottom: 1px solid var(--line);
+  }
+
+  /*
+    Blank Split View also stacks.
   */
 
   .split-workspace {
@@ -719,8 +809,46 @@ footer {
 
   .split-divider {
     flex: 0 0 7px;
-
-    cursor: row-resize;
   }
+
+  .blank-toolbar {
+    max-height: 160px;
+  }
+
 }
 
+
+/* =========================================================
+   TOUCH DEVICES
+   ========================================================= */
+
+@media (pointer: coarse) {
+
+  button {
+    min-height: 42px;
+
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .tab {
+    min-height: 46px;
+  }
+
+  .notes-editor {
+    touch-action: manipulation;
+  }
+
+  .floating-editor {
+    padding: 8px;
+
+    gap: 7px;
+  }
+
+  .floating-editor input {
+    min-height: 40px;
+
+    width: 170px;
+  }
+
+}
