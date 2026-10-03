@@ -1,613 +1,812 @@
-* {
-  box-sizing: border-box;
-}
-
-:root {
-  --bg: #f4f6f8;
-  --panel: #fff;
-  --line: #d6dbe1;
-  --text: #17202a;
-  --muted: #667085;
-  --accent: #2563eb;
-  --danger: #b42318;
-}
-
-html,
-body {
-  height: 100%;
-  margin: 0;
-}
-
-body {
-  font-family:
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  >
 
-  color: var(--text);
-  background: var(--bg);
+  <meta
+    name="description"
+    content="Private, temporary whiteboard and notepad."
+  >
+
+  <title>Online Whiteboard and Notepad</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<header class="topbar">
+
+  <div class="brand">
+    Online Whiteboard and Notepad
+  </div>
+
+  <div class="top-actions">
+
+    <span class="privacy">
+      Private · temporary · no autosave
+    </span>
+
+    <button
+      id="downloadAll"
+      class="primary"
+    >
+      Download Work
+    </button>
+
+    <button
+      id="clearAll"
+      class="danger"
+    >
+      Clear All
+    </button>
+
+  </div>
+
+</header>
+
+
+<nav
+  class="tabs"
+  aria-label="Workspace"
+>
+
+  <button
+    class="tab active"
+    data-tab="whiteboard"
+  >
+    Whiteboard
+  </button>
+
+  <button
+    class="tab"
+    data-tab="notepad"
+  >
+    Notepad
+  </button>
+
+  <button
+    class="tab"
+    data-tab="split"
+  >
+    Split View
+  </button>
+
+  <button
+    class="tab"
+    data-tab="blankSplit"
+  >
+    Blank Split View
+  </button>
+
+</nav>
+
+
+<main id="mainWorkspace">
+
+
+  <!-- =====================================================
+       MAIN WHITEBOARD
+       ===================================================== -->
+
+  <section
+    id="whiteboard"
+    class="panel active-panel"
+  >
+
+    <div class="toolbar">
+
+      <div class="tool-group">
+
+        <button
+          class="tool active"
+          data-workspace="main"
+          data-tool="select"
+          title="Select and move objects"
+        >
+          Select
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="pen"
+          title="Freehand drawing"
+        >
+          Pen
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="eraser"
+          title="Erase freehand strokes"
+        >
+          Eraser
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="node"
+          title="Place a graph node"
+        >
+          Node
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="edge"
+          title="Create an undirected edge"
+        >
+          Edge
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="directed"
+          title="Create a directed edge"
+        >
+          Directed Edge
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="weight"
+          title="Add or edit an edge weight"
+        >
+          Weight
+        </button>
+
+        <button
+          class="tool"
+          data-workspace="main"
+          data-tool="text"
+          title="Place text"
+        >
+          Text
+        </button>
+
+      </div>
+
+
+      <div class="tool-group compact">
+
+        <label>
+          Pen
+          <input
+            id="strokeColor"
+            type="color"
+            value="#111827"
+          >
+        </label>
+
+        <label>
+          Size
+          <input
+            id="strokeSize"
+            type="range"
+            min="1"
+            max="12"
+            value="3"
+          >
+        </label>
+
+        <button id="undo">
+          Undo
+        </button>
+
+        <button id="redo">
+          Redo
+        </button>
+
+        <button id="deleteSelected">
+          Delete
+        </button>
+
+        <button
+          id="clearBoard"
+          class="danger"
+        >
+          Clear Board
+        </button>
+
+      </div>
+
+
+      <div class="help">
+
+        <span id="toolHelp">
+          Select and move objects.
+        </span>
+
+        <span>
+          Tip: use Node + Edge for graph diagrams.
+        </span>
+
+      </div>
+
+    </div>
+
+
+    <div
+      id="boardWrap"
+      class="board-wrap"
+    >
+
+      <canvas
+        id="board"
+        aria-label="Whiteboard"
+      ></canvas>
+
+      <div
+        id="textEditor"
+        class="floating-editor"
+        hidden
+      >
+
+        <input
+          id="textInput"
+          type="text"
+          placeholder="Enter text"
+        >
+
+        <button id="textAdd">
+          Add
+        </button>
+
+        <button id="textCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="nodeEditor"
+        class="floating-editor"
+        hidden
+      >
+
+        <input
+          id="nodeInput"
+          type="text"
+          placeholder="Node label"
+        >
+
+        <button id="nodeAdd">
+          Apply
+        </button>
+
+        <button id="nodeCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="weightEditor"
+        class="floating-editor"
+        hidden
+      >
+
+        <input
+          id="weightInput"
+          type="text"
+          inputmode="text"
+          placeholder="Weight"
+        >
+
+        <button id="weightAdd">
+          Apply
+        </button>
+
+        <button id="weightCancel">
+          Cancel
+        </button>
+
+      </div>
+
+
+      <div
+        id="confirmEditor"
+        class="confirm-editor"
+        hidden
+      >
+
+        <span id="confirmMessage"></span>
+
+        <button
+          id="confirmYes"
+          class="danger"
+        >
+          Confirm
+        </button>
+
+        <button id="confirmNo">
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
+       MAIN NOTEPAD
+       ===================================================== -->
+
+  <section
+    id="notepad"
+    class="panel"
+  >
+
+    <div class="notepad-toolbar">
+
+      <span>
+        Scratch notes
+      </span>
+
+      <div class="notepad-actions">
+
+        <button id="insertTable">
+          Insert Table
+        </button>
+
+        <button
+          id="clearNotes"
+          class="danger"
+        >
+          Clear Notes
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div
+      id="notes"
+      class="notes-editor"
+      contenteditable="true"
+      spellcheck="false"
+      role="textbox"
+      aria-label="Scratch notes"
+      data-placeholder="Type your notes here..."
+    ></div>
+
+
+    <div
+      id="tableEditor"
+      class="table-editor"
+      hidden
+    >
+
+      <div class="table-editor-title">
+        Insert Table
+      </div>
+
+      <div class="table-controls">
+
+        <label>
+          Rows
+          <input
+            id="tableRows"
+            type="number"
+            min="1"
+            max="30"
+            value="3"
+          >
+        </label>
 
-  display: flex;
-  flex-direction: column;
+        <label>
+          Columns
+          <input
+            id="tableColumns"
+            type="number"
+            min="1"
+            max="20"
+            value="3"
+          >
+        </label>
+
+      </div>
+
+      <div class="table-editor-actions">
+
+        <button
+          id="tableInsert"
+          class="primary"
+        >
+          Insert
+        </button>
+
+        <button id="tableCancel">
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
+       EXISTING WORK SPLIT VIEW
+       ===================================================== -->
+
+  <section
+    id="split"
+    class="panel split-panel"
+  >
+
+    <div class="split-workspace">
+
+      <div class="split-half split-whiteboard">
+
+        <div class="split-title">
+          <strong>Whiteboard</strong>
+          <span>Existing work</span>
+        </div>
+
+        <div
+          id="splitBoardWrap"
+          class="board-wrap"
+        >
+
+          <canvas
+            id="splitBoard"
+            aria-label="Split view whiteboard"
+          ></canvas>
+
+        </div>
+
+      </div>
+
+
+      <div
+        class="split-divider"
+        aria-label="Resize split view"
+        tabindex="0"
+      ></div>
 
-  overflow: hidden;
-}
+
+      <div class="split-half split-notepad">
 
-button,
-input,
-textarea {
-  font: inherit;
-}
+        <div class="split-title">
+
+          <strong>Notepad</strong>
+          <span>Existing work</span>
 
-button {
-  border: 1px solid var(--line);
-  background: white;
-  color: var(--text);
+          <div class="split-note-actions">
 
-  border-radius: 7px;
+            <button id="splitInsertTable">
+              Insert Table
+            </button>
 
-  padding: 7px 10px;
+            <button
+              id="splitClearNotes"
+              class="danger"
+            >
+              Clear
+            </button>
 
-  cursor: pointer;
-}
+          </div>
 
-button:hover {
-  background: #f0f3f6;
-}
+        </div>
 
-button:focus-visible {
-  outline: 3px solid #93c5fd;
-  outline-offset: 1px;
-}
 
+        <div
+          id="splitNotes"
+          class="notes-editor"
+          contenteditable="true"
+          spellcheck="false"
+          role="textbox"
+          aria-label="Split view notes"
+          data-placeholder="Type your notes here..."
+        ></div>
 
-/* =================================
-   TOP BAR
-================================= */
 
-.topbar {
-  min-height: 58px;
+        <div
+          id="splitTableEditor"
+          class="table-editor"
+          hidden
+        >
 
-  padding: 10px 16px;
+          <div class="table-editor-title">
+            Insert Table
+          </div>
 
-  background: var(--panel);
+          <div class="table-controls">
 
-  border-bottom: 1px solid var(--line);
+            <label>
+              Rows
+              <input
+                id="splitTableRows"
+                type="number"
+                min="1"
+                max="30"
+                value="3"
+              >
+            </label>
 
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+            <label>
+              Columns
+              <input
+                id="splitTableColumns"
+                type="number"
+                min="1"
+                max="20"
+                value="3"
+              >
+            </label>
 
-  gap: 16px;
-}
+          </div>
 
-.brand {
-  font-weight: 700;
-  font-size: 18px;
-}
+          <div class="table-editor-actions">
 
-.top-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+            <button
+              id="splitTableInsert"
+              class="primary"
+            >
+              Insert
+            </button>
 
-.privacy {
-  color: var(--muted);
-  font-size: 12px;
-}
+            <button id="splitTableCancel">
+              Cancel
+            </button>
 
-.primary {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
-}
+          </div>
 
-.primary:hover {
-  background: #1d4ed8;
-}
+        </div>
 
-.danger {
-  color: var(--danger);
-}
+      </div>
 
+    </div>
 
-/* =================================
-   TABS
-================================= */
+  </section>
 
-.tabs {
-  display: flex;
 
-  gap: 2px;
 
-  padding: 0 16px;
+  <!-- =====================================================
+       BLANK SPLIT VIEW
+       ===================================================== -->
 
-  background: white;
+  <section
+    id="blankSplit"
+    class="panel split-panel"
+  >
 
-  border-bottom: 1px solid var(--line);
-}
+    <div class="split-workspace blank-workspace">
 
-.tab {
-  border: 0;
-  border-radius: 0;
+      <div class="split-half split-whiteboard">
 
-  padding: 11px 18px;
+        <div class="split-title">
 
-  background: transparent;
+          <strong>Blank Whiteboard</strong>
 
-  border-bottom: 3px solid transparent;
-}
+          <span>
+            Separate workspace
+          </span>
 
-.tab.active {
-  border-bottom-color: var(--accent);
+        </div>
 
-  font-weight: 700;
 
-  color: var(--accent);
-}
+        <div
+          id="blankBoardWrap"
+          class="board-wrap"
+        >
 
+          <canvas
+            id="blankBoard"
+            aria-label="Blank split view whiteboard"
+          ></canvas>
 
-/* =================================
-   MAIN
-================================= */
 
-main {
-  flex: 1;
-  min-height: 0;
-}
+          <div
+            id="blankTextEditor"
+            class="floating-editor"
+            hidden
+          >
 
-.panel {
-  height: 100%;
-  display: none;
-}
+            <input
+              id="blankTextInput"
+              type="text"
+              placeholder="Enter text"
+            >
 
-.active-panel {
-  display: flex;
-  flex-direction: column;
-}
+            <button id="blankTextAdd">
+              Add
+            </button>
 
+            <button id="blankTextCancel">
+              Cancel
+            </button>
 
-/* =================================
-   WHITEBOARD TOOLBAR
-================================= */
+          </div>
 
-.toolbar {
-  background: white;
 
-  border-bottom: 1px solid var(--line);
+          <div
+            id="blankNodeEditor"
+            class="floating-editor"
+            hidden
+          >
 
-  padding: 8px 10px;
-}
+            <input
+              id="blankNodeInput"
+              type="text"
+              placeholder="Node label"
+            >
 
-.tool-group {
-  display: flex;
+            <button id="blankNodeAdd">
+              Apply
+            </button>
 
-  align-items: center;
+            <button id="blankNodeCancel">
+              Cancel
+            </button>
 
-  gap: 5px;
+          </div>
 
-  flex-wrap: wrap;
-}
 
-.tool-group + .tool-group {
-  margin-top: 7px;
-}
+          <div
+            id="blankWeightEditor"
+            class="floating-editor"
+            hidden
+          >
 
-.tool.active {
-  background: #dbeafe;
+            <input
+              id="blankWeightInput"
+              type="text"
+              placeholder="Weight"
+            >
 
-  color: #1d4ed8;
+            <button id="blankWeightAdd">
+              Apply
+            </button>
 
-  border-color: #93c5fd;
+            <button id="blankWeightCancel">
+              Cancel
+            </button>
 
-  font-weight: 700;
-}
+          </div>
 
-.compact label {
-  display: flex;
+        </div>
 
-  align-items: center;
+      </div>
 
-  gap: 4px;
 
-  font-size: 13px;
-}
+      <div
+        class="split-divider"
+        aria-label="Resize blank split view"
+        tabindex="0"
+      ></div>
 
-.help {
-  margin-top: 7px;
 
-  font-size: 12px;
+      <div class="split-half split-notepad">
 
-  color: var(--muted);
+        <div class="split-title">
 
-  display: flex;
+          <strong>Blank Notepad</strong>
 
-  gap: 18px;
+          <span>
+            Separate workspace
+          </span>
 
-  flex-wrap: wrap;
-}
+          <div class="split-note-actions">
 
+            <button id="blankInsertTable">
+              Insert Table
+            </button>
 
-/* =================================
-   WHITEBOARD
-================================= */
+            <button
+              id="blankClearNotes"
+              class="danger"
+            >
+              Clear
+            </button>
 
-.board-wrap {
-  flex: 1;
+          </div>
 
-  min-height: 0;
+        </div>
 
-  position: relative;
 
-  background: white;
+        <div
+          id="blankNotes"
+          class="notes-editor"
+          contenteditable="true"
+          spellcheck="false"
+          role="textbox"
+          aria-label="Blank split view notes"
+          data-placeholder="Type your notes here..."
+        ></div>
 
-  overflow: hidden;
-}
 
-#board {
-  width: 100%;
-  height: 100%;
+        <div
+          id="blankTableEditor"
+          class="table-editor"
+          hidden
+        >
 
-  display: block;
+          <div class="table-editor-title">
+            Insert Table
+          </div>
 
-  cursor: crosshair;
+          <div class="table-controls">
 
-  touch-action: none;
-}
+            <label>
+              Rows
+              <input
+                id="blankTableRows"
+                type="number"
+                min="1"
+                max="30"
+                value="3"
+              >
+            </label>
 
+            <label>
+              Columns
+              <input
+                id="blankTableColumns"
+                type="number"
+                min="1"
+                max="20"
+                value="3"
+              >
+            </label>
 
-/* =================================
-   WHITEBOARD EDITORS
-================================= */
+          </div>
 
-.floating-editor {
-  position: absolute;
+          <div class="table-editor-actions">
 
-  display: flex;
+            <button
+              id="blankTableInsert"
+              class="primary"
+            >
+              Insert
+            </button>
 
-  align-items: center;
+            <button id="blankTableCancel">
+              Cancel
+            </button>
 
-  gap: 5px;
+          </div>
 
-  padding: 6px;
+        </div>
 
-  background: white;
+      </div>
 
-  border: 1px solid var(--line);
+    </div>
 
-  border-radius: 8px;
+  </section>
 
-  box-shadow:
-    0 6px 22px rgba(0, 0, 0, .15);
+</main>
 
-  z-index: 20;
-}
 
-.floating-editor[hidden] {
-  display: none !important;
-}
+<footer>
 
-.floating-editor input {
-  width: 150px;
+  <span>
+    No accounts · no collaboration · no browser storage · no server-side work storage
+  </span>
 
-  padding: 6px 8px;
+</footer>
 
-  border: 1px solid var(--line);
 
-  border-radius: 5px;
+<script src="app.js"></script>
 
-  outline: none;
-}
-
-.floating-editor input:focus {
-  border-color: #93c5fd;
-
-  box-shadow:
-    0 0 0 2px rgba(37, 99, 235, .12);
-}
-
-
-/* =================================
-   CONFIRMATION
-================================= */
-
-.confirm-editor {
-  position: absolute;
-
-  left: 50%;
-  top: 50%;
-
-  transform: translate(-50%, -50%);
-
-  display: flex;
-
-  align-items: center;
-
-  gap: 8px;
-
-  padding: 12px 14px;
-
-  background: white;
-
-  border: 1px solid var(--line);
-
-  border-radius: 9px;
-
-  box-shadow:
-    0 8px 30px rgba(0, 0, 0, .18);
-
-  z-index: 30;
-}
-
-.confirm-editor[hidden] {
-  display: none !important;
-}
-
-#confirmMessage {
-  margin-right: 4px;
-
-  font-size: 14px;
-}
-
-
-/* =================================
-   NOTEPAD TOOLBAR
-================================= */
-
-.notepad-toolbar {
-  padding: 9px 12px;
-
-  background: white;
-
-  border-bottom: 1px solid var(--line);
-
-  display: flex;
-
-  justify-content: space-between;
-
-  align-items: center;
-}
-
-.notepad-actions {
-  display: flex;
-
-  align-items: center;
-
-  gap: 6px;
-}
-
-
-/* =================================
-   NOTEPAD EDITOR
-================================= */
-
-.notes-editor {
-  flex: 1;
-
-  width: 100%;
-
-  min-height: 0;
-
-  overflow-y: auto;
-
-  padding: 24px;
-
-  background: white;
-
-  outline: none;
-
-  font:
-    16px/1.55
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
-
-  white-space: pre-wrap;
-
-  overflow-wrap: break-word;
-}
-
-
-/* Placeholder */
-
-.notes-editor:empty::before {
-  content: attr(data-placeholder);
-
-  color: #98a2b3;
-
-  pointer-events: none;
-}
-
-
-/* =================================
-   TABLES IN NOTEPAD
-================================= */
-
-.notes-editor table {
-  border-collapse: collapse;
-
-  margin: 12px 0;
-
-  font:
-    15px/1.4
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
-
-  background: white;
-}
-
-.notes-editor td {
-  min-width: 90px;
-
-  height: 32px;
-
-  border: 1px solid #7b8794;
-
-  padding: 5px 8px;
-
-  vertical-align: top;
-
-  text-align: left;
-
-  outline: none;
-}
-
-.notes-editor td:focus {
-  background: #f8fbff;
-
-  box-shadow:
-    inset 0 0 0 2px #93c5fd;
-}
-
-.notes-editor td:empty::before {
-  content: "\00a0";
-}
-
-
-/* =================================
-   TABLE INSERT PANEL
-================================= */
-
-.table-editor {
-  position: absolute;
-
-  top: 58px;
-  right: 14px;
-
-  width: 240px;
-
-  padding: 14px;
-
-  background: white;
-
-  border: 1px solid var(--line);
-
-  border-radius: 9px;
-
-  box-shadow:
-    0 8px 28px rgba(0, 0, 0, .16);
-
-  z-index: 40;
-}
-
-.table-editor[hidden] {
-  display: none !important;
-}
-
-.table-editor-title {
-  font-weight: 700;
-
-  margin-bottom: 12px;
-}
-
-.table-controls {
-  display: flex;
-
-  gap: 12px;
-
-  margin-bottom: 14px;
-}
-
-.table-controls label {
-  display: flex;
-
-  flex-direction: column;
-
-  gap: 4px;
-
-  font-size: 13px;
-
-  flex: 1;
-}
-
-.table-controls input {
-  width: 100%;
-
-  padding: 6px 7px;
-
-  border: 1px solid var(--line);
-
-  border-radius: 5px;
-}
-
-.table-editor-actions {
-  display: flex;
-
-  justify-content: flex-end;
-
-  gap: 6px;
-}
-
-
-/* =================================
-   FOOTER
-================================= */
-
-footer {
-  padding: 6px 12px;
-
-  background: white;
-
-  border-top: 1px solid var(--line);
-
-  color: var(--muted);
-
-  font-size: 11px;
-
-  text-align: center;
-}
-
-
-/* =================================
-   MOBILE
-================================= */
-
-@media (max-width: 700px) {
-
-  .privacy {
-    display: none;
-  }
-
-  .topbar {
-    padding: 8px 10px;
-  }
-
-  .brand {
-    font-size: 16px;
-  }
-
-  .toolbar {
-    max-height: 210px;
-
-    overflow: auto;
-  }
-
-  .notepad-toolbar {
-    flex-wrap: wrap;
-
-    gap: 8px;
-  }
-
-  .table-editor {
-    right: 8px;
-    left: 8px;
-
-    width: auto;
-  }
-
-  .notes-editor {
-    padding: 16px;
-  }
-
-  .notes-editor td {
-    min-width: 75px;
-  }
-}
+</body>
+</html>
