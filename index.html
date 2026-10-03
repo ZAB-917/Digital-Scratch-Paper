@@ -7,9 +7,11 @@
   <title>Online Whiteboard and Notepad</title>
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand">Online Whiteboard and Notepad</div>
+
     <div class="top-actions">
       <span class="privacy">Private · temporary · no autosave</span>
       <button id="downloadAll" class="primary">Download Work</button>
@@ -23,22 +25,78 @@
   </nav>
 
   <main>
+
+    <!-- WHITEBOARD -->
     <section id="whiteboard" class="panel active-panel">
+
       <div class="toolbar">
+
         <div class="tool-group">
-          <button class="tool active" data-tool="select" title="Select and move objects">Select</button>
-          <button class="tool" data-tool="pen" title="Freehand drawing">Pen</button>
-          <button class="tool" data-tool="eraser" title="Erase freehand strokes">Eraser</button>
-          <button class="tool" data-tool="node" title="Place a graph node">Node</button>
-          <button class="tool" data-tool="edge" title="Create an edge between two nodes">Edge</button>
-          <button class="tool" data-tool="directed" title="Create a directed edge">Directed Edge</button>
-          <button class="tool" data-tool="weight" title="Add or edit an edge weight">Weight</button>
-          <button class="tool" data-tool="text" title="Place text">Text</button>
+          <button class="tool active"
+                  data-tool="select"
+                  title="Select and move objects">
+            Select
+          </button>
+
+          <button class="tool"
+                  data-tool="pen"
+                  title="Freehand drawing">
+            Pen
+          </button>
+
+          <button class="tool"
+                  data-tool="eraser"
+                  title="Erase freehand strokes">
+            Eraser
+          </button>
+
+          <button class="tool"
+                  data-tool="node"
+                  title="Place a graph node">
+            Node
+          </button>
+
+          <button class="tool"
+                  data-tool="edge"
+                  title="Create an edge between two nodes">
+            Edge
+          </button>
+
+          <button class="tool"
+                  data-tool="directed"
+                  title="Create a directed edge">
+            Directed Edge
+          </button>
+
+          <button class="tool"
+                  data-tool="weight"
+                  title="Add or edit an edge weight">
+            Weight
+          </button>
+
+          <button class="tool"
+                  data-tool="text"
+                  title="Place text">
+            Text
+          </button>
         </div>
 
         <div class="tool-group compact">
-          <label>Pen <input id="strokeColor" type="color" value="#111827"></label>
-          <label>Size <input id="strokeSize" type="range" min="1" max="12" value="3"></label>
+
+          <label>
+            Pen
+            <input id="strokeColor" type="color" value="#111827">
+          </label>
+
+          <label>
+            Size
+            <input id="strokeSize"
+                   type="range"
+                   min="1"
+                   max="12"
+                   value="3">
+          </label>
+
           <button id="undo">Undo</button>
           <button id="redo">Redo</button>
           <button id="deleteSelected">Delete</button>
@@ -49,29 +107,82 @@
           <span id="toolHelp">Select and move objects.</span>
           <span>Tip: use Node + Edge for graph diagrams.</span>
         </div>
+
       </div>
 
       <div id="boardWrap" class="board-wrap">
+
         <canvas id="board" aria-label="Whiteboard"></canvas>
-        <div id="textEditor" class="floating-editor" hidden>
-          <input id="textInput" type="text" placeholder="Enter text">
+
+        <!-- Text editor -->
+        <div id="textEditor"
+             class="floating-editor"
+             hidden>
+          <input id="textInput"
+                 type="text"
+                 placeholder="Enter text">
           <button id="textAdd">Add</button>
           <button id="textCancel">Cancel</button>
         </div>
+
+        <!-- Node label editor -->
+        <div id="nodeEditor"
+             class="floating-editor"
+             hidden>
+          <input id="nodeInput"
+                 type="text"
+                 placeholder="Node label">
+          <button id="nodeAdd">Apply</button>
+          <button id="nodeCancel">Cancel</button>
+        </div>
+
+        <!-- Weight editor -->
+        <div id="weightEditor"
+             class="floating-editor"
+             hidden>
+          <input id="weightInput"
+                 type="text"
+                 inputmode="text"
+                 placeholder="Weight">
+          <button id="weightAdd">Apply</button>
+          <button id="weightCancel">Cancel</button>
+        </div>
+
+        <!-- In-page confirmation -->
+        <div id="confirmEditor"
+             class="confirm-editor"
+             hidden>
+          <span id="confirmMessage"></span>
+          <button id="confirmYes" class="danger">Confirm</button>
+          <button id="confirmNo">Cancel</button>
+        </div>
+
       </div>
     </section>
 
+
+    <!-- NOTEPAD -->
     <section id="notepad" class="panel">
+
       <div class="notepad-toolbar">
         <span>Scratch notes</span>
         <button id="clearNotes" class="danger">Clear Notes</button>
       </div>
-      <textarea id="notes" spellcheck="false" placeholder="Type your notes here..."></textarea>
+
+      <textarea
+        id="notes"
+        spellcheck="false"
+        placeholder="Type your notes here..."
+      ></textarea>
+
     </section>
+
   </main>
 
   <footer>
-    <span>No accounts · no collaboration · no browser storage · no server-side work storage</span>
+    <span>
+      No accounts · no collaboration · no browser storage · no server-side work storage
+    </span>
   </footer>
 
   <script src="app.js"></script>
