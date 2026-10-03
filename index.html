@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Private, temporary exam whiteboard and notepad.">
+  <title>Exam Whiteboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Exam Whiteboard</div>
+    <div class="top-actions">
+      <span class="privacy">Private · temporary · no autosave</span>
+      <button id="downloadAll" class="primary">Download Work</button>
+      <button id="clearAll" class="danger">Clear All</button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Workspace">
+    <button class="tab active" data-tab="whiteboard">Whiteboard</button>
+    <button class="tab" data-tab="notepad">Notepad</button>
+  </nav>
+
+  <main>
+    <section id="whiteboard" class="panel active-panel">
+      <div class="toolbar">
+        <div class="tool-group">
+          <button class="tool active" data-tool="select" title="Select and move objects">Select</button>
+          <button class="tool" data-tool="pen" title="Freehand drawing">Pen</button>
+          <button class="tool" data-tool="eraser" title="Erase freehand strokes">Eraser</button>
+          <button class="tool" data-tool="node" title="Place a graph node">Node</button>
+          <button class="tool" data-tool="edge" title="Create an edge between two nodes">Edge</button>
+          <button class="tool" data-tool="directed" title="Create a directed edge">Directed Edge</button>
+          <button class="tool" data-tool="weight" title="Add or edit an edge weight">Weight</button>
+          <button class="tool" data-tool="text" title="Place text">Text</button>
+        </div>
+
+        <div class="tool-group compact">
+          <label>Pen <input id="strokeColor" type="color" value="#111827"></label>
+          <label>Size <input id="strokeSize" type="range" min="1" max="12" value="3"></label>
+          <button id="undo">Undo</button>
+          <button id="redo">Redo</button>
+          <button id="deleteSelected">Delete</button>
+          <button id="clearBoard" class="danger">Clear Board</button>
+        </div>
+
+        <div class="help">
+          <span id="toolHelp">Select and move objects.</span>
+          <span>Tip: use Node + Edge for graph diagrams. Nothing runs an algorithm.</span>
+        </div>
+      </div>
+
+      <div id="boardWrap" class="board-wrap">
+        <canvas id="board" aria-label="Exam whiteboard"></canvas>
+        <div id="textEditor" class="floating-editor" hidden>
+          <input id="textInput" type="text" placeholder="Enter text">
+          <button id="textAdd">Add</button>
+          <button id="textCancel">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="notepad" class="panel">
+      <div class="notepad-toolbar">
+        <span>Scratch notes</span>
+        <button id="clearNotes" class="danger">Clear Notes</button>
+      </div>
+      <textarea id="notes" spellcheck="false" placeholder="Type your notes here..."></textarea>
+    </section>
+  </main>
+
+  <footer>
+    <span>No accounts · no collaboration · no browser storage · no server-side work storage</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
