@@ -1,512 +1,302 @@
-/* =========================================================
-   WORKSPACE STATE
-   ========================================================= */
-
-function createWorkspaceState() {
-  return {
-    objects: [],
-    selectedId: null,
-    tool: "select",
-    color: "#111827",
-    size: 3,
-    history: [],
-    future: [],
-    edgeStartNodeId: null
-  };
-}
-
+"use strict";
 
 /*
-  MAIN workspace:
-  This is the student's normal whiteboard/notepad.
+  =========================================================
+  DIGITAL SCRATCH PAPER
+  =========================================================
 
-  BLANK workspace:
-  Completely independent blank workspace.
+  There is intentionally NO:
+
+  - localStorage
+  - sessionStorage
+  - IndexedDB
+  - cookies
+  - server storage
+  - analytics
+  - accounts
+  - network requests
+
+  Existing Split View uses the SAME whiteboard and notepad
+  as the normal tabs.
+
+  Blank Split View has its own independent workspace.
 */
-
-const mainState =
-  createWorkspaceState();
-
-const blankState =
-  createWorkspaceState();
-
-
-/* =========================================================
-   DOM REFERENCES
-   ========================================================= */
-
-const main = document.getElementById(
-  "mainWorkspace"
-);
-
-
-/* Main whiteboard */
-
-const board =
-  document.getElementById("board");
-
-const boardWrap =
-  document.getElementById("boardWrap");
-
-const ctx =
-  board.getContext("2d");
-
-
-/* Existing-work split whiteboard */
-
-const splitBoard =
-  document.getElementById("splitBoard");
-
-const splitBoardWrap =
-  document.getElementById(
-    "splitBoardWrap"
-  );
-
-const splitCtx =
-  splitBoard.getContext("2d");
-
-
-/* Blank split whiteboard */
-
-const blankBoard =
-  document.getElementById(
-    "blankBoard"
-  );
-
-const blankBoardWrap =
-  document.getElementById(
-    "blankBoardWrap"
-  );
-
-const blankCtx =
-  blankBoard.getContext("2d");
-
-
-/* Notes */
-
-const notes =
-  document.getElementById("notes");
-
-const splitNotes =
-  document.getElementById(
-    "splitNotes"
-  );
-
-const blankNotes =
-  document.getElementById(
-    "blankNotes"
-  );
-
-
-/* =========================================================
-   CURSOR MEMORY
-   ========================================================= */
-
-let savedNotesRange = null;
-let savedBlankNotesRange = null;
-
-
-function saveSelectionFor(
-  editor,
-  callback
-) {
-  const selection =
-    window.getSelection();
-
-  if (
-    !selection ||
-    selection.rangeCount === 0
-  ) {
-    return;
-  }
-
-  const range =
-    selection.getRangeAt(0);
-
-  if (
-    editor.contains(
-      range.startContainer
-    ) &&
-    editor.contains(
-      range.endContainer
-    )
-  ) {
-    callback(
-      range.cloneRange()
-    );
-  }
-}
-
-
-function restoreSelection(
-  range
-) {
-  if (!range) {
-    return false;
-  }
-
-  try {
-
-    const selection =
-      window.getSelection();
-
-    selection.removeAllRanges();
-
-    selection.addRange(
-      range
-    );
-
-    return true;
-
-  } catch {
-    return false;
-  }
-}
-
-
-function saveMainNotesSelection() {
-  saveSelectionFor(
-    notes,
-    range => {
-      savedNotesRange =
-        range;
-    }
-  );
-}
-
-
-function saveBlankNotesSelection() {
-  saveSelectionFor(
-    blankNotes,
-    range => {
-      savedBlankNotesRange =
-        range;
-    }
-  );
-}
-
-
-document.addEventListener(
-  "selectionchange",
-  () => {
-
-    const active =
-      document.activeElement;
-
-    if (
-      active === notes ||
-      notes.contains(active)
-    ) {
-      saveMainNotesSelection();
-    }
-
-    if (
-      active === blankNotes ||
-      blankNotes.contains(active)
-    ) {
-      saveBlankNotesSelection();
-    }
-  }
-);
-
-
-[
-  "mouseup",
-  "keyup",
-  "focus"
-].forEach(eventName => {
-
-  notes.addEventListener(
-    eventName,
-    saveMainNotesSelection
-  );
-
-  blankNotes.addEventListener(
-    eventName,
-    saveBlankNotesSelection
-  );
-
-});
 
 
 /* =========================================================
    GENERAL HELPERS
    ========================================================= */
 
-function makeId() {
-  return (
-    Math.random()
-      .toString(36)
-      .slice(2) +
-    Date.now()
-      .toString(36)
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+function downloadText(text, filename, type = "text/plain") {
+  downloadBlob(
+    new Blob([text], { type }),
+    filename
   );
-}
-
-
-function cloneObjects(objects) {
-  return JSON.parse(
-    JSON.stringify(objects)
-  );
-}
-
-
-function saveHistory(state) {
-  state.history.push(
-    cloneObjects(
-      state.objects
-    )
-  );
-
-  if (
-    state.history.length > 100
-  ) {
-    state.history.shift();
-  }
-
-  state.future = [];
-}
-
-
-function restoreObjects(
-  state,
-  objects
-) {
-  state.objects =
-    cloneObjects(objects);
-
-  state.selectedId = null;
-
-  redrawAll();
-}
-
-
-function getObject(
-  state,
-  id
-) {
-  return state.objects.find(
-    obj =>
-      obj.id === id
-  );
-}
-
-
-function getNode(
-  state,
-  id
-) {
-  const object =
-    getObject(
-      state,
-      id
-    );
-
-  return object &&
-    object.type === "node"
-    ? object
-    : null;
-}
-
-
-function getEdge(
-  state,
-  id
-) {
-  const object =
-    getObject(
-      state,
-      id
-    );
-
-  if (!object) {
-    return null;
-  }
-
-  return (
-    object.type === "edge" ||
-    object.type === "directed"
-  )
-    ? object
-    : null;
-}
-
-
-function distance(a, b) {
-  return Math.hypot(
-    a.x - b.x,
-    a.y - b.y
-  );
-}
-
-
-function midpoint(a, b) {
-  return {
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2
-  };
-}
-
-
-function getPoint(
-  event,
-  canvasElement
-) {
-  const rect =
-    canvasElement.getBoundingClientRect();
-
-  return {
-    x:
-      event.clientX -
-      rect.left,
-
-    y:
-      event.clientY -
-      rect.top
-  };
 }
 
 
 /* =========================================================
-   CANVAS RESIZING
+   WHITEBOARD FACTORY
    ========================================================= */
 
-function resizeCanvas(
-  canvasElement,
-  wrapElement,
-  context
-) {
-  const rect =
-    wrapElement.getBoundingClientRect();
+function createWhiteboard(config) {
 
-  if (
-    rect.width <= 0 ||
-    rect.height <= 0
-  ) {
-    return;
-  }
-
-  const dpr =
-    window.devicePixelRatio || 1;
-
-  canvasElement.width =
-    Math.max(
-      1,
-      Math.floor(
-        rect.width * dpr
-      )
-    );
-
-  canvasElement.height =
-    Math.max(
-      1,
-      Math.floor(
-        rect.height * dpr
-      )
-    );
-
-  canvasElement.style.width =
-    `${rect.width}px`;
-
-  canvasElement.style.height =
-    `${rect.height}px`;
-
-  context.setTransform(
-    dpr,
-    0,
-    0,
-    dpr,
-    0,
-    0
-  );
-}
-
-
-function resizeAllCanvases() {
-
-  resizeCanvas(
-    board,
+  const {
+    canvas,
     boardWrap,
-    ctx
-  );
 
-  resizeCanvas(
-    splitBoard,
-    splitBoardWrap,
-    splitCtx
-  );
+    toolButtons,
+    colorInput,
+    sizeInput,
 
-  resizeCanvas(
-    blankBoard,
-    blankBoardWrap,
-    blankCtx
-  );
+    undoButton,
+    redoButton,
+    deleteButton,
+    clearButton,
 
-  redrawAll();
-}
+    toolHelp,
 
+    textEditor,
+    textInput,
+    textAdd,
+    textCancel,
 
-/* =========================================================
-   HIT TESTING
-   ========================================================= */
+    nodeEditor,
+    nodeInput,
+    nodeAdd,
+    nodeCancel,
 
-function nodeAt(
-  state,
-  point
-) {
-  for (
-    let i =
-      state.objects.length - 1;
-    i >= 0;
-    i--
-  ) {
-
-    const object =
-      state.objects[i];
-
-    if (
-      object.type !== "node"
-    ) {
-      continue;
-    }
-
-    if (
-      distance(
-        point,
-        object
-      ) <= 24
-    ) {
-      return object;
-    }
-  }
-
-  return null;
-}
+    weightEditor,
+    weightInput,
+    weightAdd,
+    weightCancel
+  } = config;
 
 
-function pointToSegmentDistance(
-  point,
-  a,
-  b
-) {
-  const dx =
-    b.x - a.x;
+  const ctx = canvas.getContext("2d");
 
-  const dy =
-    b.y - a.y;
 
-  if (
-    dx === 0 &&
-    dy === 0
-  ) {
-    return distance(
-      point,
-      a
+  const state = {
+
+    objects: [],
+
+    selectedId: null,
+
+    tool: "select",
+
+    color: colorInput.value,
+
+    size: Number(sizeInput.value),
+
+    history: [],
+
+    future: []
+
+  };
+
+
+  let pendingNodePosition = null;
+
+  let pendingTextPosition = null;
+
+  let pendingWeightId = null;
+
+  let pendingEdgeNodeId = null;
+
+  let draggingNodeId = null;
+
+  let dragBefore = null;
+
+  let drawing = false;
+
+  let currentStroke = null;
+
+  let lastPoint = null;
+
+
+  const toolDescriptions = {
+
+    select: "Select and move objects.",
+
+    pen: "Draw freehand.",
+
+    eraser: "Erase freehand strokes.",
+
+    node: "Click the board to place a node.",
+
+    edge: "Click two nodes to create an edge.",
+
+    directed: "Click two nodes to create a directed edge.",
+
+    weight: "Click an edge to add or edit its weight.",
+
+    text: "Click the board to place text."
+
+  };
+
+
+  function makeId() {
+    return (
+      Date.now().toString(36) +
+      Math.random().toString(36).slice(2)
     );
   }
 
-  const t =
-    Math.max(
+
+  function snapshot() {
+    return deepClone(state.objects);
+  }
+
+
+  function commitMutation(before) {
+
+    const after = JSON.stringify(state.objects);
+
+    const beforeString = JSON.stringify(before);
+
+    if (after === beforeString) {
+      return;
+    }
+
+    state.history.push(before);
+
+    if (state.history.length > 100) {
+      state.history.shift();
+    }
+
+    state.future = [];
+  }
+
+
+  function restore(objects) {
+
+    state.objects = deepClone(objects);
+
+    state.selectedId = null;
+
+    pendingEdgeNodeId = null;
+
+    draw();
+  }
+
+
+  function undo() {
+
+    if (!state.history.length) {
+      return;
+    }
+
+    const previous = state.history.pop();
+
+    state.future.push(snapshot());
+
+    restore(previous);
+  }
+
+
+  function redo() {
+
+    if (!state.future.length) {
+      return;
+    }
+
+    const next = state.future.pop();
+
+    state.history.push(snapshot());
+
+    restore(next);
+  }
+
+
+  function getPoint(event) {
+
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+
+  function resize() {
+
+    const rect = boardWrap.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) {
+      return;
+    }
+
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = Math.max(
+      1,
+      Math.floor(rect.width * dpr)
+    );
+
+    canvas.height = Math.max(
+      1,
+      Math.floor(rect.height * dpr)
+    );
+
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+
+    ctx.setTransform(
+      dpr,
+      0,
+      0,
+      dpr,
+      0,
+      0
+    );
+
+    draw();
+  }
+
+
+  function distance(a, b) {
+
+    return Math.hypot(
+      a.x - b.x,
+      a.y - b.y
+    );
+  }
+
+
+  function distanceToSegment(point, a, b) {
+
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+
+    if (dx === 0 && dy === 0) {
+      return distance(point, a);
+    }
+
+    const t = Math.max(
       0,
       Math.min(
         1,
@@ -518,2846 +308,1682 @@ function pointToSegmentDistance(
       )
     );
 
-  const closest = {
-    x:
-      a.x + t * dx,
+    const projection = {
+      x: a.x + t * dx,
+      y: a.y + t * dy
+    };
 
-    y:
-      a.y + t * dy
-  };
-
-  return distance(
-    point,
-    closest
-  );
-}
-
-
-function edgeAt(
-  state,
-  point
-) {
-  for (
-    let i =
-      state.objects.length - 1;
-    i >= 0;
-    i--
-  ) {
-
-    const object =
-      state.objects[i];
-
-    if (
-      object.type !== "edge" &&
-      object.type !== "directed"
-    ) {
-      continue;
-    }
-
-    const from =
-      getNode(
-        state,
-        object.from
-      );
-
-    const to =
-      getNode(
-        state,
-        object.to
-      );
-
-    if (!from || !to) {
-      continue;
-    }
-
-    if (
-      pointToSegmentDistance(
-        point,
-        from,
-        to
-      ) <= 10
-    ) {
-      return object;
-    }
+    return distance(point, projection);
   }
 
-  return null;
-}
 
+  function findNodeAt(point) {
 
-function strokeAt(
-  state,
-  point
-) {
-  for (
-    let i =
-      state.objects.length - 1;
-    i >= 0;
-    i--
-  ) {
+    for (let i = state.objects.length - 1; i >= 0; i--) {
 
-    const object =
-      state.objects[i];
+      const object = state.objects[i];
 
-    if (
-      object.type !== "stroke"
-    ) {
-      continue;
-    }
-
-    for (
-      let j = 1;
-      j < object.points.length;
-      j++
-    ) {
+      if (object.type !== "node") {
+        continue;
+      }
 
       if (
-        pointToSegmentDistance(
+        distance(
           point,
-          object.points[j - 1],
-          object.points[j]
-        ) <=
-        Math.max(
-          8,
-          object.size + 5
-        )
+          {
+            x: object.x,
+            y: object.y
+          }
+        ) <= 25
       ) {
         return object;
       }
+
     }
+
+    return null;
   }
 
-  return null;
-}
 
+  function findEdgeAt(point) {
 
-function objectAt(
-  state,
-  point
-) {
-  return (
-    nodeAt(state, point) ||
-    edgeAt(state, point) ||
-    strokeAt(state, point)
-  );
-}
+    for (let i = state.objects.length - 1; i >= 0; i--) {
 
+      const object = state.objects[i];
 
-/* =========================================================
-   DRAWING
-   ========================================================= */
+      if (
+        object.type !== "edge" &&
+        object.type !== "directed"
+      ) {
+        continue;
+      }
 
-function drawGrid(
-  context,
-  wrap
-) {
-  const rect =
-    wrap.getBoundingClientRect();
+      const from = findObjectById(object.from);
+      const to = findObjectById(object.to);
 
-  const spacing = 25;
+      if (!from || !to) {
+        continue;
+      }
 
-  context.save();
-
-  context.strokeStyle =
-    "#eef1f4";
-
-  context.lineWidth = 1;
-
-  for (
-    let x = 0;
-    x <= rect.width;
-    x += spacing
-  ) {
-
-    context.beginPath();
-
-    context.moveTo(
-      x,
-      0
-    );
-
-    context.lineTo(
-      x,
-      rect.height
-    );
-
-    context.stroke();
-  }
-
-  for (
-    let y = 0;
-    y <= rect.height;
-    y += spacing
-  ) {
-
-    context.beginPath();
-
-    context.moveTo(
-      0,
-      y
-    );
-
-    context.lineTo(
-      rect.width,
-      y
-    );
-
-    context.stroke();
-  }
-
-  context.restore();
-}
-
-
-function drawArrowhead(
-  context,
-  from,
-  to
-) {
-  const angle =
-    Math.atan2(
-      to.y - from.y,
-      to.x - from.x
-    );
-
-  const length = 12;
-  const width = Math.PI / 7;
-
-  context.beginPath();
-
-  context.moveTo(
-    to.x,
-    to.y
-  );
-
-  context.lineTo(
-    to.x -
-      length *
-      Math.cos(
-        angle - width
-      ),
-    to.y -
-      length *
-      Math.sin(
-        angle - width
-      )
-  );
-
-  context.lineTo(
-    to.x -
-      length *
-      Math.cos(
-        angle + width
-      ),
-    to.y -
-      length *
-      Math.sin(
-        angle + width
-      )
-  );
-
-  context.closePath();
-
-  context.fill();
-}
-
-
-function drawNode(
-  context,
-  node,
-  selected
-) {
-  context.save();
-
-  context.beginPath();
-
-  context.arc(
-    node.x,
-    node.y,
-    20,
-    0,
-    Math.PI * 2
-  );
-
-  context.fillStyle =
-    "#ffffff";
-
-  context.fill();
-
-  context.lineWidth =
-    selected ? 3 : 2;
-
-  context.strokeStyle =
-    selected
-      ? "#2563eb"
-      : "#111827";
-
-  context.stroke();
-
-  if (node.label) {
-
-    context.fillStyle =
-      "#111827";
-
-    context.font =
-      "14px system-ui, sans-serif";
-
-    context.textAlign =
-      "center";
-
-    context.textBaseline =
-      "middle";
-
-    context.fillText(
-      node.label,
-      node.x,
-      node.y
-    );
-  }
-
-  context.restore();
-}
-
-
-function drawEdge(
-  context,
-  state,
-  edge,
-  selected
-) {
-  const from =
-    getNode(
-      state,
-      edge.from
-    );
-
-  const to =
-    getNode(
-      state,
-      edge.to
-    );
-
-  if (!from || !to) {
-    return;
-  }
-
-  context.save();
-
-  context.strokeStyle =
-    selected
-      ? "#2563eb"
-      : "#111827";
-
-  context.fillStyle =
-    selected
-      ? "#2563eb"
-      : "#111827";
-
-  context.lineWidth =
-    selected ? 3 : 2;
-
-  context.beginPath();
-
-  context.moveTo(
-    from.x,
-    from.y
-  );
-
-  context.lineTo(
-    to.x,
-    to.y
-  );
-
-  context.stroke();
-
-  if (
-    edge.type === "directed"
-  ) {
-    drawArrowhead(
-      context,
-      from,
-      to
-    );
-  }
-
-  if (
-    edge.weight !== undefined &&
-    edge.weight !== ""
-  ) {
-
-    const mid =
-      midpoint(
-        from,
-        to
+      const distanceToLine = distanceToSegment(
+        point,
+        {
+          x: from.x,
+          y: from.y
+        },
+        {
+          x: to.x,
+          y: to.y
+        }
       );
 
-    const text =
-      String(edge.weight);
+      if (distanceToLine <= 10) {
+        return object;
+      }
 
-    context.font =
-      "14px system-ui, sans-serif";
-
-    context.textAlign =
-      "center";
-
-    context.textBaseline =
-      "middle";
-
-    const metrics =
-      context.measureText(
-        text
-      );
-
-    context.fillStyle =
-      "#ffffff";
-
-    context.fillRect(
-      mid.x -
-        metrics.width / 2 -
-        5,
-
-      mid.y - 12,
-
-      metrics.width + 10,
-
-      24
-    );
-
-    context.fillStyle =
-      selected
-        ? "#2563eb"
-        : "#111827";
-
-    context.fillText(
-      text,
-      mid.x,
-      mid.y
-    );
-  }
-
-  context.restore();
-}
-
-
-function drawStroke(
-  context,
-  stroke
-) {
-  if (
-    !stroke.points.length
-  ) {
-    return;
-  }
-
-  context.save();
-
-  context.strokeStyle =
-    stroke.color ||
-    "#111827";
-
-  context.lineWidth =
-    stroke.size || 3;
-
-  context.lineCap =
-    "round";
-
-  context.lineJoin =
-    "round";
-
-  context.beginPath();
-
-  context.moveTo(
-    stroke.points[0].x,
-    stroke.points[0].y
-  );
-
-  for (
-    let i = 1;
-    i < stroke.points.length;
-    i++
-  ) {
-
-    context.lineTo(
-      stroke.points[i].x,
-      stroke.points[i].y
-    );
-  }
-
-  context.stroke();
-
-  context.restore();
-}
-
-
-function drawTextObject(
-  context,
-  object
-) {
-  context.save();
-
-  context.fillStyle =
-    object.color ||
-    "#111827";
-
-  context.font =
-    "16px system-ui, sans-serif";
-
-  context.textBaseline =
-    "top";
-
-  const lines =
-    String(
-      object.text || ""
-    ).split("\n");
-
-  lines.forEach(
-    (line, index) => {
-
-      context.fillText(
-        line,
-        object.x,
-        object.y +
-          index * 21
-      );
     }
-  );
 
-  context.restore();
-}
-
-
-function drawWorkspace(
-  context,
-  wrap,
-  state
-) {
-  const rect =
-    wrap.getBoundingClientRect();
-
-  if (
-    rect.width <= 0 ||
-    rect.height <= 0
-  ) {
-    return;
+    return null;
   }
 
-  context.clearRect(
-    0,
-    0,
-    rect.width,
-    rect.height
-  );
 
-  drawGrid(
-    context,
-    wrap
-  );
+  function findStrokeAt(point) {
 
-  for (
-    const object of state.objects
-  ) {
+    for (let i = state.objects.length - 1; i >= 0; i--) {
+
+      const object = state.objects[i];
+
+      if (object.type !== "stroke") {
+        continue;
+      }
+
+      for (let j = 1; j < object.points.length; j++) {
+
+        if (
+          distanceToSegment(
+            point,
+            object.points[j - 1],
+            object.points[j]
+          ) <= Math.max(10, object.size + 5)
+        ) {
+          return object;
+        }
+
+      }
+
+    }
+
+    return null;
+  }
+
+
+  function findObjectAt(point) {
+
+    const node = findNodeAt(point);
+
+    if (node) {
+      return node;
+    }
+
+    const edge = findEdgeAt(point);
+
+    if (edge) {
+      return edge;
+    }
+
+    return findStrokeAt(point);
+  }
+
+
+  function findObjectById(id) {
+
+    return state.objects.find(
+      object => object.id === id
+    );
+  }
+
+
+  function edgeEndpoints(edge) {
+
+    const from = findObjectById(edge.from);
+    const to = findObjectById(edge.to);
+
+    if (!from || !to) {
+      return null;
+    }
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+
+    const length = Math.hypot(dx, dy);
+
+    if (!length) {
+      return null;
+    }
+
+    const radius = 22;
+
+    const ux = dx / length;
+    const uy = dy / length;
+
+    return {
+
+      start: {
+        x: from.x + ux * radius,
+        y: from.y + uy * radius
+      },
+
+      end: {
+        x: to.x - ux * radius,
+        y: to.y - uy * radius
+      }
+
+    };
+  }
+
+
+  function drawArrowhead(end, start) {
+
+    const angle = Math.atan2(
+      end.y - start.y,
+      end.x - start.x
+    );
+
+    const size = 10;
+
+    ctx.beginPath();
+
+    ctx.moveTo(end.x, end.y);
+
+    ctx.lineTo(
+      end.x - size * Math.cos(angle - Math.PI / 6),
+      end.y - size * Math.sin(angle - Math.PI / 6)
+    );
+
+    ctx.lineTo(
+      end.x - size * Math.cos(angle + Math.PI / 6),
+      end.y - size * Math.sin(angle + Math.PI / 6)
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+  }
+
+
+  function drawEdge(object) {
+
+    const endpoints = edgeEndpoints(object);
+
+    if (!endpoints) {
+      return;
+    }
+
+    const {
+      start,
+      end
+    } = endpoints;
+
+    ctx.save();
+
+    ctx.strokeStyle = "#374151";
+
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+
+    ctx.moveTo(start.x, start.y);
+
+    ctx.lineTo(end.x, end.y);
+
+    ctx.stroke();
+
+    if (object.type === "directed") {
+
+      ctx.fillStyle = "#374151";
+
+      drawArrowhead(end, start);
+    }
 
     if (
-      object.type === "stroke"
+      object.weight !== undefined &&
+      object.weight !== ""
     ) {
-      drawStroke(
-        context,
-        object
+
+      const midX =
+        (start.x + end.x) / 2;
+
+      const midY =
+        (start.y + end.y) / 2;
+
+      ctx.fillStyle = "#111827";
+
+      ctx.font =
+        "14px system-ui, sans-serif";
+
+      ctx.textAlign = "center";
+
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(
+        String(object.weight),
+        midX,
+        midY - 10
       );
     }
+
+    ctx.restore();
   }
 
-  for (
-    const object of state.objects
-  ) {
+
+  function drawStroke(object) {
+
+    if (!object.points.length) {
+      return;
+    }
+
+    ctx.save();
+
+    ctx.strokeStyle = object.color;
+
+    ctx.lineWidth = object.size;
+
+    ctx.lineCap = "round";
+
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+
+    ctx.moveTo(
+      object.points[0].x,
+      object.points[0].y
+    );
+
+    for (let i = 1; i < object.points.length; i++) {
+
+      ctx.lineTo(
+        object.points[i].x,
+        object.points[i].y
+      );
+
+    }
+
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+
+  function drawNode(object) {
+
+    const selected =
+      object.id === state.selectedId;
+
+    ctx.save();
+
+    ctx.beginPath();
+
+    ctx.arc(
+      object.x,
+      object.y,
+      22,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fillStyle = "white";
+
+    ctx.fill();
+
+    ctx.lineWidth = selected ? 4 : 2;
+
+    ctx.strokeStyle =
+      selected ? "#2563eb" : "#111827";
+
+    ctx.stroke();
+
+    if (object.label) {
+
+      ctx.fillStyle = "#111827";
+
+      ctx.font =
+        "15px system-ui, sans-serif";
+
+      ctx.textAlign = "center";
+
+      ctx.textBaseline = "middle";
+
+      ctx.fillText(
+        object.label,
+        object.x,
+        object.y
+      );
+
+    }
+
+    ctx.restore();
+  }
+
+
+  function drawText(object) {
+
+    ctx.save();
+
+    ctx.fillStyle = object.color;
+
+    ctx.font =
+      `${Math.max(12, object.size * 5)}px system-ui, sans-serif`;
+
+    ctx.textAlign = "left";
+
+    ctx.textBaseline = "top";
+
+    ctx.fillText(
+      object.text,
+      object.x,
+      object.y
+    );
+
+    ctx.restore();
+  }
+
+
+  function drawSelection(object) {
+
+    if (!object || object.type === "node") {
+      return;
+    }
+
+    if (object.type === "stroke") {
+
+      if (!object.points.length) {
+        return;
+      }
+
+      ctx.save();
+
+      ctx.strokeStyle = "#2563eb";
+
+      ctx.lineWidth = object.size + 7;
+
+      ctx.globalAlpha = 0.18;
+
+      ctx.lineCap = "round";
+
+      ctx.lineJoin = "round";
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        object.points[0].x,
+        object.points[0].y
+      );
+
+      for (let i = 1; i < object.points.length; i++) {
+
+        ctx.lineTo(
+          object.points[i].x,
+          object.points[i].y
+        );
+
+      }
+
+      ctx.stroke();
+
+      ctx.restore();
+
+      return;
+    }
 
     if (
       object.type === "edge" ||
       object.type === "directed"
     ) {
 
-      drawEdge(
-        context,
-        state,
-        object,
-        object.id ===
-          state.selectedId
+      const endpoints =
+        edgeEndpoints(object);
+
+      if (!endpoints) {
+        return;
+      }
+
+      ctx.save();
+
+      ctx.strokeStyle = "#2563eb";
+
+      ctx.lineWidth = 7;
+
+      ctx.globalAlpha = 0.18;
+
+      ctx.beginPath();
+
+      ctx.moveTo(
+        endpoints.start.x,
+        endpoints.start.y
       );
+
+      ctx.lineTo(
+        endpoints.end.x,
+        endpoints.end.y
+      );
+
+      ctx.stroke();
+
+      ctx.restore();
+
     }
+
   }
 
-  for (
-    const object of state.objects
-  ) {
+
+  function draw() {
+
+    const rect =
+      boardWrap.getBoundingClientRect();
 
     if (
-      object.type === "node"
+      rect.width <= 0 ||
+      rect.height <= 0
     ) {
-
-      drawNode(
-        context,
-        object,
-        object.id ===
-          state.selectedId
-      );
+      return;
     }
+
+    ctx.clearRect(
+      0,
+      0,
+      rect.width,
+      rect.height
+    );
+
+
+    /*
+      Edges first.
+    */
+
+    for (const object of state.objects) {
+
+      if (
+        object.type === "edge" ||
+        object.type === "directed"
+      ) {
+        drawEdge(object);
+      }
+
+    }
+
+
+    /*
+      Freehand strokes.
+    */
+
+    for (const object of state.objects) {
+
+      if (object.type === "stroke") {
+        drawStroke(object);
+      }
+
+    }
+
+
+    /*
+      Text.
+    */
+
+    for (const object of state.objects) {
+
+      if (object.type === "text") {
+        drawText(object);
+      }
+
+    }
+
+
+    /*
+      Nodes last so they sit above edges.
+    */
+
+    for (const object of state.objects) {
+
+      if (object.type === "node") {
+        drawNode(object);
+      }
+
+    }
+
+
+    const selected =
+      findObjectById(state.selectedId);
+
+    if (selected) {
+      drawSelection(selected);
+
+      if (selected.type === "node") {
+        drawNode(selected);
+      }
+    }
+
+
+    /*
+      Temporary edge source indicator.
+    */
+
+    if (pendingEdgeNodeId) {
+
+      const node =
+        findObjectById(pendingEdgeNodeId);
+
+      if (node) {
+
+        ctx.save();
+
+        ctx.beginPath();
+
+        ctx.arc(
+          node.x,
+          node.y,
+          27,
+          0,
+          Math.PI * 2
+        );
+
+        ctx.strokeStyle = "#2563eb";
+
+        ctx.lineWidth = 3;
+
+        ctx.setLineDash([5, 4]);
+
+        ctx.stroke();
+
+        ctx.restore();
+
+      }
+
+    }
+
   }
 
-  for (
-    const object of state.objects
-  ) {
+
+  function hideEditors() {
+
+    textEditor.hidden = true;
+
+    nodeEditor.hidden = true;
+
+    weightEditor.hidden = true;
+  }
+
+
+  function showEditor(editor, x, y) {
+
+    editor.hidden = false;
+
+    const rect =
+      boardWrap.getBoundingClientRect();
+
+    requestAnimationFrame(() => {
+
+      const width = editor.offsetWidth;
+      const height = editor.offsetHeight;
+
+      const left = Math.max(
+        5,
+        Math.min(
+          x,
+          rect.width - width - 5
+        )
+      );
+
+      const top = Math.max(
+        5,
+        Math.min(
+          y,
+          rect.height - height - 5
+        )
+      );
+
+      editor.style.left = `${left}px`;
+      editor.style.top = `${top}px`;
+
+    });
+  }
+
+
+  function setTool(tool) {
+
+    state.tool = tool;
+
+    pendingEdgeNodeId = null;
+
+    hideEditors();
+
+    toolButtons.forEach(button => {
+
+      button.classList.toggle(
+        "active",
+        button.dataset.tool === tool
+      );
+
+    });
+
+    toolHelp.textContent =
+      toolDescriptions[tool];
+
+    draw();
+  }
+
+
+  function removeObject(id) {
+
+    const index =
+      state.objects.findIndex(
+        object => object.id === id
+      );
+
+    if (index === -1) {
+      return;
+    }
+
+    const before = snapshot();
+
+    state.objects.splice(index, 1);
+
+    state.selectedId = null;
+
+    commitMutation(before);
+
+    draw();
+  }
+
+
+  function openTextEditor(point) {
+
+    pendingTextPosition = point;
+
+    textInput.value = "";
+
+    showEditor(
+      textEditor,
+      point.x + 8,
+      point.y + 8
+    );
+
+    textInput.focus();
+  }
+
+
+  function addText() {
+
+    const value =
+      textInput.value.trim();
+
+    if (!value || !pendingTextPosition) {
+      hideEditors();
+      return;
+    }
+
+    const before = snapshot();
+
+    state.objects.push({
+
+      id: makeId(),
+
+      type: "text",
+
+      x: pendingTextPosition.x,
+
+      y: pendingTextPosition.y,
+
+      text: value,
+
+      color: state.color,
+
+      size: state.size
+
+    });
+
+    commitMutation(before);
+
+    pendingTextPosition = null;
+
+    hideEditors();
+
+    draw();
+  }
+
+
+  function openNodeEditor(point) {
+
+    pendingNodePosition = point;
+
+    nodeInput.value = "";
+
+    showEditor(
+      nodeEditor,
+      point.x + 8,
+      point.y + 8
+    );
+
+    nodeInput.focus();
+  }
+
+
+  function addNode() {
+
+    if (!pendingNodePosition) {
+      return;
+    }
+
+    const before = snapshot();
+
+    state.objects.push({
+
+      id: makeId(),
+
+      type: "node",
+
+      x: pendingNodePosition.x,
+
+      y: pendingNodePosition.y,
+
+      label: nodeInput.value.trim()
+
+    });
+
+    commitMutation(before);
+
+    pendingNodePosition = null;
+
+    hideEditors();
+
+    draw();
+  }
+
+
+  function openWeightEditor(edge) {
+
+    pendingWeightId = edge.id;
+
+    weightInput.value =
+      edge.weight ?? "";
+
+    const endpoints =
+      edgeEndpoints(edge);
+
+    if (!endpoints) {
+      return;
+    }
+
+    const x =
+      (endpoints.start.x + endpoints.end.x) / 2;
+
+    const y =
+      (endpoints.start.y + endpoints.end.y) / 2;
+
+    showEditor(
+      weightEditor,
+      x + 8,
+      y + 8
+    );
+
+    weightInput.focus();
+  }
+
+
+  function applyWeight() {
+
+    if (!pendingWeightId) {
+      return;
+    }
+
+    const edge =
+      findObjectById(pendingWeightId);
+
+    if (!edge) {
+      hideEditors();
+      return;
+    }
+
+    const before = snapshot();
+
+    edge.weight =
+      weightInput.value.trim();
+
+    commitMutation(before);
+
+    pendingWeightId = null;
+
+    hideEditors();
+
+    draw();
+  }
+
+
+  function createEdge(type, firstNode, secondNode) {
 
     if (
-      object.type === "text"
+      !firstNode ||
+      !secondNode ||
+      firstNode.id === secondNode.id
+    ) {
+      return;
+    }
+
+    const before = snapshot();
+
+    state.objects.push({
+
+      id: makeId(),
+
+      type,
+
+      from: firstNode.id,
+
+      to: secondNode.id,
+
+      weight: ""
+
+    });
+
+    commitMutation(before);
+
+    state.selectedId =
+      state.objects[state.objects.length - 1].id;
+
+    draw();
+  }
+
+
+  function handleEdgeTool(point) {
+
+    const node =
+      findNodeAt(point);
+
+    if (!node) {
+      return;
+    }
+
+    if (!pendingEdgeNodeId) {
+
+      pendingEdgeNodeId = node.id;
+
+      state.selectedId = node.id;
+
+      toolHelp.textContent =
+        "Click another node to create the edge.";
+
+      draw();
+
+      return;
+    }
+
+
+    const first =
+      findObjectById(pendingEdgeNodeId);
+
+    const second = node;
+
+    const type =
+      state.tool === "directed"
+        ? "directed"
+        : "edge";
+
+    createEdge(
+      type,
+      first,
+      second
+    );
+
+    pendingEdgeNodeId = null;
+
+    toolHelp.textContent =
+      toolDescriptions[state.tool];
+
+    draw();
+  }
+
+
+  function eraseAt(point) {
+
+    const object =
+      findStrokeAt(point);
+
+    if (!object) {
+      return;
+    }
+
+    const before = snapshot();
+
+    state.objects =
+      state.objects.filter(
+        item => item.id !== object.id
+      );
+
+    commitMutation(before);
+
+    draw();
+  }
+
+
+  function pointerDown(event) {
+
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+
+    const point =
+      getPoint(event);
+
+    canvas.setPointerCapture?.(
+      event.pointerId
+    );
+
+
+    if (state.tool === "pen") {
+
+      drawing = true;
+
+      currentStroke = {
+
+        id: makeId(),
+
+        type: "stroke",
+
+        points: [point],
+
+        color: state.color,
+
+        size: state.size
+
+      };
+
+      state.objects.push(currentStroke);
+
+      lastPoint = point;
+
+      draw();
+
+      return;
+    }
+
+
+    if (state.tool === "eraser") {
+
+      drawing = true;
+
+      eraseAt(point);
+
+      return;
+    }
+
+
+    if (
+      state.tool === "edge" ||
+      state.tool === "directed"
     ) {
 
-      drawTextObject(
-        context,
-        object
-      );
+      handleEdgeTool(point);
+
+      return;
     }
+
+
+    if (state.tool === "node") {
+
+      openNodeEditor(point);
+
+      return;
+    }
+
+
+    if (state.tool === "text") {
+
+      openTextEditor(point);
+
+      return;
+    }
+
+
+    if (state.tool === "weight") {
+
+      const edge =
+        findEdgeAt(point);
+
+      if (edge) {
+        openWeightEditor(edge);
+      }
+
+      return;
+    }
+
+
+    if (state.tool === "select") {
+
+      const object =
+        findObjectAt(point);
+
+      state.selectedId =
+        object ? object.id : null;
+
+      if (
+        object &&
+        object.type === "node"
+      ) {
+
+        draggingNodeId = object.id;
+
+        dragBefore = snapshot();
+
+        canvas.style.cursor = "grabbing";
+      }
+
+      draw();
+
+    }
+
   }
-}
 
 
-function redrawAll() {
+  function pointerMove(event) {
 
-  drawWorkspace(
-    ctx,
-    boardWrap,
-    mainState
-  );
-
-  drawWorkspace(
-    splitCtx,
-    splitBoardWrap,
-    mainState
-  );
-
-  drawWorkspace(
-    blankCtx,
-    blankBoardWrap,
-    blankState
-  );
-}
+    const point =
+      getPoint(event);
 
 
-/* =========================================================
-   MAIN TOOL HELP
-   ========================================================= */
+    if (state.tool === "pen" && drawing) {
 
-const toolHelp =
-  document.getElementById(
-    "toolHelp"
-  );
+      if (!currentStroke) {
+        return;
+      }
 
-const toolDescriptions = {
-  select:
-    "Select and move objects.",
+      currentStroke.points.push(point);
 
-  pen:
-    "Draw freehand.",
+      lastPoint = point;
 
-  eraser:
-    "Erase freehand strokes.",
+      draw();
 
-  node:
-    "Click to place a graph node.",
-
-  edge:
-    "Click two nodes to connect them.",
-
-  directed:
-    "Click two nodes to create a directed edge.",
-
-  weight:
-    "Click an edge to add or edit its weight.",
-
-  text:
-    "Click to place text."
-};
+      return;
+    }
 
 
-/* =========================================================
-   TOOL SELECTION
-   ========================================================= */
+    if (state.tool === "eraser" && drawing) {
 
-document
-  .querySelectorAll(
-    ".tool[data-workspace='main']"
-  )
-  .forEach(button => {
+      eraseAt(point);
+
+      return;
+    }
+
+
+    if (
+      state.tool === "select" &&
+      draggingNodeId
+    ) {
+
+      const node =
+        findObjectById(draggingNodeId);
+
+      if (!node) {
+        return;
+      }
+
+      node.x = point.x;
+
+      node.y = point.y;
+
+      draw();
+
+    }
+
+  }
+
+
+  function pointerUp(event) {
+
+    if (state.tool === "pen" && drawing) {
+
+      drawing = false;
+
+      if (currentStroke) {
+
+        if (
+          currentStroke.points.length === 1
+        ) {
+
+          const p =
+            currentStroke.points[0];
+
+          currentStroke.points.push({
+            x: p.x + 0.1,
+            y: p.y + 0.1
+          });
+
+        }
+
+        state.history.push(
+          state.objects
+            .slice(0, -1)
+            .map(item => deepClone(item))
+        );
+
+        if (state.history.length > 100) {
+          state.history.shift();
+        }
+
+        state.future = [];
+      }
+
+      currentStroke = null;
+
+      lastPoint = null;
+
+      draw();
+
+    }
+
+
+    if (state.tool === "eraser") {
+
+      drawing = false;
+
+    }
+
+
+    if (
+      state.tool === "select" &&
+      draggingNodeId
+    ) {
+
+      commitMutation(dragBefore);
+
+      draggingNodeId = null;
+
+      dragBefore = null;
+
+      canvas.style.cursor = "crosshair";
+
+      draw();
+
+    }
+
+
+    canvas.releasePointerCapture?.(
+      event.pointerId
+    );
+
+  }
+
+
+  function pointerCancel(event) {
+    pointerUp(event);
+  }
+
+
+  toolButtons.forEach(button => {
 
     button.addEventListener(
       "click",
       () => {
-
-        mainState.tool =
-          button.dataset.tool;
-
-        mainState.edgeStartNodeId =
-          null;
-
-        document
-          .querySelectorAll(
-            ".tool[data-workspace='main']"
-          )
-          .forEach(btn =>
-            btn.classList.remove(
-              "active"
-            )
-          );
-
-        button.classList.add(
-          "active"
-        );
-
-        toolHelp.textContent =
-          toolDescriptions[
-            mainState.tool
-          ];
-
-        updateCanvasCursors();
-
-        redrawAll();
+        setTool(button.dataset.tool);
       }
     );
+
   });
 
 
-function updateCanvasCursors() {
-
-  const cursor =
-    mainState.tool === "select"
-      ? "default"
-      : "crosshair";
-
-  board.style.cursor =
-    cursor;
-
-  splitBoard.style.cursor =
-    cursor;
-
-  blankBoard.style.cursor =
-    blankState.tool === "select"
-      ? "default"
-      : "crosshair";
-}
-
-
-/* =========================================================
-   MAIN COLORS / PEN SIZE
-   ========================================================= */
-
-document
-  .getElementById(
-    "strokeColor"
-  )
-  .addEventListener(
+  colorInput.addEventListener(
     "input",
-    event => {
-
-      mainState.color =
-        event.target.value;
+    () => {
+      state.color = colorInput.value;
     }
   );
 
 
-document
-  .getElementById(
-    "strokeSize"
-  )
-  .addEventListener(
+  sizeInput.addEventListener(
     "input",
-    event => {
-
-      mainState.size =
-        Number(
-          event.target.value
-        );
-    }
-  );
-
-
-/* =========================================================
-   FLOATING EDITORS
-   ========================================================= */
-
-let activeEditorBoardWrap =
-  boardWrap;
-
-
-function positionEditor(
-  editor,
-  point,
-  wrap
-) {
-  editor.style.left =
-    `${Math.max(
-      10,
-      Math.min(
-        point.x + 10,
-        wrap.clientWidth -
-          editor.offsetWidth -
-          10
-      )
-    )}px`;
-
-  editor.style.top =
-    `${Math.max(
-      10,
-      Math.min(
-        point.y + 10,
-        wrap.clientHeight -
-          editor.offsetHeight -
-          10
-      )
-    )}px`;
-}
-
-
-function hideMainEditors() {
-
-  document
-    .getElementById(
-      "textEditor"
-    )
-    .hidden = true;
-
-  document
-    .getElementById(
-      "nodeEditor"
-    )
-    .hidden = true;
-
-  document
-    .getElementById(
-      "weightEditor"
-    )
-    .hidden = true;
-}
-
-
-function hideBlankEditors() {
-
-  document
-    .getElementById(
-      "blankTextEditor"
-    )
-    .hidden = true;
-
-  document
-    .getElementById(
-      "blankNodeEditor"
-    )
-    .hidden = true;
-
-  document
-    .getElementById(
-      "blankWeightEditor"
-    )
-    .hidden = true;
-}
-
-
-/* =========================================================
-   MAIN WHITEBOARD EDITORS
-   ========================================================= */
-
-let mainPendingTextPoint = null;
-let mainPendingNodePoint = null;
-let mainPendingNodeId = null;
-let mainPendingWeightEdgeId = null;
-
-
-function openMainTextEditor(
-  point,
-  wrap
-) {
-  hideMainEditors();
-
-  activeEditorBoardWrap =
-    wrap;
-
-  mainPendingTextPoint =
-    point;
-
-  const editor =
-    document.getElementById(
-      "textEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
     () => {
-
-      positionEditor(
-        editor,
-        point,
-        wrap
-      );
-
-      document
-        .getElementById(
-          "textInput"
-        )
-        .focus();
+      state.size =
+        Number(sizeInput.value);
     }
   );
-}
 
 
-function openMainNodeEditor(
-  point,
-  wrap,
-  node = null
-) {
-  hideMainEditors();
-
-  activeEditorBoardWrap =
-    wrap;
-
-  mainPendingNodePoint =
-    point;
-
-  mainPendingNodeId =
-    node
-      ? node.id
-      : null;
-
-  const input =
-    document.getElementById(
-      "nodeInput"
-    );
-
-  input.value =
-    node
-      ? node.label || ""
-      : "";
-
-  const editor =
-    document.getElementById(
-      "nodeEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
-    () => {
-
-      positionEditor(
-        editor,
-        point,
-        wrap
-      );
-
-      input.focus();
-      input.select();
-    }
-  );
-}
-
-
-function openMainWeightEditor(
-  edge,
-  wrap
-) {
-  hideMainEditors();
-
-  activeEditorBoardWrap =
-    wrap;
-
-  mainPendingWeightEdgeId =
-    edge.id;
-
-  const from =
-    getNode(
-      mainState,
-      edge.from
-    );
-
-  const to =
-    getNode(
-      mainState,
-      edge.to
-    );
-
-  if (!from || !to) {
-    return;
-  }
-
-  const point =
-    midpoint(
-      from,
-      to
-    );
-
-  const input =
-    document.getElementById(
-      "weightInput"
-    );
-
-  input.value =
-    edge.weight ?? "";
-
-  const editor =
-    document.getElementById(
-      "weightEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
-    () => {
-
-      positionEditor(
-        editor,
-        point,
-        wrap
-      );
-
-      input.focus();
-      input.select();
-    }
-  );
-}
-
-
-function applyMainText() {
-
-  const value =
-    document
-      .getElementById(
-        "textInput"
-      )
-      .value.trim();
-
-  if (
-    !value ||
-    !mainPendingTextPoint
-  ) {
-    hideMainEditors();
-    return;
-  }
-
-  saveHistory(mainState);
-
-  mainState.objects.push({
-    id: makeId(),
-    type: "text",
-    x: mainPendingTextPoint.x,
-    y: mainPendingTextPoint.y,
-    text: value,
-    color: mainState.color
-  });
-
-  mainPendingTextPoint =
-    null;
-
-  hideMainEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "textAdd"
-  )
-  .addEventListener(
+  undoButton.addEventListener(
     "click",
-    applyMainText
+    undo
   );
 
 
-document
-  .getElementById(
-    "textCancel"
-  )
-  .addEventListener(
+  redoButton.addEventListener(
+    "click",
+    redo
+  );
+
+
+  deleteButton.addEventListener(
     "click",
     () => {
 
-      mainPendingTextPoint =
-        null;
-
-      hideMainEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "textInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyMainText();
+      if (state.selectedId) {
+        removeObject(state.selectedId);
       }
 
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        mainPendingTextPoint =
-          null;
-
-        hideMainEditors();
-      }
     }
   );
 
 
-function applyMainNodeLabel() {
-
-  const label =
-    document
-      .getElementById(
-        "nodeInput"
-      )
-      .value.trim();
-
-  if (
-    mainPendingNodeId
-  ) {
-
-    const node =
-      getNode(
-        mainState,
-        mainPendingNodeId
-      );
-
-    if (node) {
-
-      saveHistory(mainState);
-
-      node.label =
-        label;
-    }
-
-  } else if (
-    mainPendingNodePoint
-  ) {
-
-    saveHistory(mainState);
-
-    mainState.objects.push({
-      id: makeId(),
-      type: "node",
-      x: mainPendingNodePoint.x,
-      y: mainPendingNodePoint.y,
-      label
-    });
-  }
-
-  mainPendingNodePoint =
-    null;
-
-  mainPendingNodeId =
-    null;
-
-  hideMainEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "nodeAdd"
-  )
-  .addEventListener(
-    "click",
-    applyMainNodeLabel
-  );
-
-
-document
-  .getElementById(
-    "nodeCancel"
-  )
-  .addEventListener(
+  clearButton.addEventListener(
     "click",
     () => {
 
-      mainPendingNodePoint =
-        null;
-
-      mainPendingNodeId =
-        null;
-
-      hideMainEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "nodeInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyMainNodeLabel();
-      }
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        mainPendingNodePoint =
-          null;
-
-        mainPendingNodeId =
-          null;
-
-        hideMainEditors();
-      }
-    }
-  );
-
-
-function applyMainWeight() {
-
-  const edge =
-    getEdge(
-      mainState,
-      mainPendingWeightEdgeId
-    );
-
-  if (edge) {
-
-    saveHistory(mainState);
-
-    edge.weight =
-      document
-        .getElementById(
-          "weightInput"
-        )
-        .value.trim();
-  }
-
-  mainPendingWeightEdgeId =
-    null;
-
-  hideMainEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "weightAdd"
-  )
-  .addEventListener(
-    "click",
-    applyMainWeight
-  );
-
-
-document
-  .getElementById(
-    "weightCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      mainPendingWeightEdgeId =
-        null;
-
-      hideMainEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "weightInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyMainWeight();
-      }
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        mainPendingWeightEdgeId =
-          null;
-
-        hideMainEditors();
-      }
-    }
-  );
-
-
-/* =========================================================
-   BLANK WHITEBOARD EDITORS
-   ========================================================= */
-
-let blankPendingTextPoint = null;
-let blankPendingNodePoint = null;
-let blankPendingNodeId = null;
-let blankPendingWeightEdgeId = null;
-
-
-function positionBlankEditor(
-  editor,
-  point
-) {
-  positionEditor(
-    editor,
-    point,
-    blankBoardWrap
-  );
-}
-
-
-function openBlankTextEditor(point) {
-
-  hideBlankEditors();
-
-  blankPendingTextPoint =
-    point;
-
-  const editor =
-    document.getElementById(
-      "blankTextEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
-    () => {
-
-      positionBlankEditor(
-        editor,
-        point
-      );
-
-      document
-        .getElementById(
-          "blankTextInput"
-        )
-        .focus();
-    }
-  );
-}
-
-
-function openBlankNodeEditor(
-  point,
-  node = null
-) {
-  hideBlankEditors();
-
-  blankPendingNodePoint =
-    point;
-
-  blankPendingNodeId =
-    node
-      ? node.id
-      : null;
-
-  const input =
-    document.getElementById(
-      "blankNodeInput"
-    );
-
-  input.value =
-    node
-      ? node.label || ""
-      : "";
-
-  const editor =
-    document.getElementById(
-      "blankNodeEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
-    () => {
-
-      positionBlankEditor(
-        editor,
-        point
-      );
-
-      input.focus();
-      input.select();
-    }
-  );
-}
-
-
-function openBlankWeightEditor(
-  edge
-) {
-  hideBlankEditors();
-
-  blankPendingWeightEdgeId =
-    edge.id;
-
-  const from =
-    getNode(
-      blankState,
-      edge.from
-    );
-
-  const to =
-    getNode(
-      blankState,
-      edge.to
-    );
-
-  if (!from || !to) {
-    return;
-  }
-
-  const point =
-    midpoint(
-      from,
-      to
-    );
-
-  const input =
-    document.getElementById(
-      "blankWeightInput"
-    );
-
-  input.value =
-    edge.weight ?? "";
-
-  const editor =
-    document.getElementById(
-      "blankWeightEditor"
-    );
-
-  editor.hidden = false;
-
-  requestAnimationFrame(
-    () => {
-
-      positionBlankEditor(
-        editor,
-        point
-      );
-
-      input.focus();
-      input.select();
-    }
-  );
-}
-
-
-function applyBlankText() {
-
-  const value =
-    document
-      .getElementById(
-        "blankTextInput"
-      )
-      .value.trim();
-
-  if (
-    !value ||
-    !blankPendingTextPoint
-  ) {
-    hideBlankEditors();
-    return;
-  }
-
-  saveHistory(blankState);
-
-  blankState.objects.push({
-    id: makeId(),
-    type: "text",
-    x: blankPendingTextPoint.x,
-    y: blankPendingTextPoint.y,
-    text: value,
-    color: blankState.color
-  });
-
-  blankPendingTextPoint =
-    null;
-
-  hideBlankEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "blankTextAdd"
-  )
-  .addEventListener(
-    "click",
-    applyBlankText
-  );
-
-
-document
-  .getElementById(
-    "blankTextCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      blankPendingTextPoint =
-        null;
-
-      hideBlankEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "blankTextInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyBlankText();
-      }
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        blankPendingTextPoint =
-          null;
-
-        hideBlankEditors();
-      }
-    }
-  );
-
-
-function applyBlankNodeLabel() {
-
-  const label =
-    document
-      .getElementById(
-        "blankNodeInput"
-      )
-      .value.trim();
-
-  if (
-    blankPendingNodeId
-  ) {
-
-    const node =
-      getNode(
-        blankState,
-        blankPendingNodeId
-      );
-
-    if (node) {
-
-      saveHistory(blankState);
-
-      node.label =
-        label;
-    }
-
-  } else if (
-    blankPendingNodePoint
-  ) {
-
-    saveHistory(blankState);
-
-    blankState.objects.push({
-      id: makeId(),
-      type: "node",
-      x: blankPendingNodePoint.x,
-      y: blankPendingNodePoint.y,
-      label
-    });
-  }
-
-  blankPendingNodePoint =
-    null;
-
-  blankPendingNodeId =
-    null;
-
-  hideBlankEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "blankNodeAdd"
-  )
-  .addEventListener(
-    "click",
-    applyBlankNodeLabel
-  );
-
-
-document
-  .getElementById(
-    "blankNodeCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      blankPendingNodePoint =
-        null;
-
-      blankPendingNodeId =
-        null;
-
-      hideBlankEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "blankNodeInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyBlankNodeLabel();
-      }
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        blankPendingNodePoint =
-          null;
-
-        blankPendingNodeId =
-          null;
-
-        hideBlankEditors();
-      }
-    }
-  );
-
-
-function applyBlankWeight() {
-
-  const edge =
-    getEdge(
-      blankState,
-      blankPendingWeightEdgeId
-    );
-
-  if (edge) {
-
-    saveHistory(blankState);
-
-    edge.weight =
-      document
-        .getElementById(
-          "blankWeightInput"
-        )
-        .value.trim();
-  }
-
-  blankPendingWeightEdgeId =
-    null;
-
-  hideBlankEditors();
-
-  redrawAll();
-}
-
-
-document
-  .getElementById(
-    "blankWeightAdd"
-  )
-  .addEventListener(
-    "click",
-    applyBlankWeight
-  );
-
-
-document
-  .getElementById(
-    "blankWeightCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      blankPendingWeightEdgeId =
-        null;
-
-      hideBlankEditors();
-    }
-  );
-
-
-document
-  .getElementById(
-    "blankWeightInput"
-  )
-  .addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter"
-      ) {
-
-        event.preventDefault();
-
-        applyBlankWeight();
-      }
-
-      if (
-        event.key === "Escape"
-      ) {
-
-        event.preventDefault();
-
-        blankPendingWeightEdgeId =
-          null;
-
-        hideBlankEditors();
-      }
-    }
-  );
-
-
-/* =========================================================
-   POINTER HANDLING
-   ========================================================= */
-
-let drawingStroke = null;
-let dragState = null;
-
-
-function handlePointerDown(
-  event,
-  state,
-  canvasElement,
-  wrapElement,
-  isBlank
-) {
-  event.preventDefault();
-
-  const point =
-    getPoint(
-      event,
-      canvasElement
-    );
-
-  if (isBlank) {
-    hideBlankEditors();
-  } else {
-    hideMainEditors();
-  }
-
-
-  /* -------------------------------------------------------
-     PEN
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "pen"
-  ) {
-
-    saveHistory(state);
-
-    drawingStroke = {
-      state,
-      canvasElement,
-      id: makeId(),
-      type: "stroke",
-      color: state.color,
-      size: state.size,
-      points: [point]
-    };
-
-    canvasElement.setPointerCapture(
-      event.pointerId
-    );
-
-    redrawAll();
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     ERASER
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "eraser"
-  ) {
-
-    const target =
-      strokeAt(
-        state,
-        point
-      );
-
-    if (target) {
-
-      saveHistory(state);
-
-      state.objects =
-        state.objects.filter(
-          object =>
-            object.id !==
-            target.id
-        );
-
-      redrawAll();
-    }
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     NODE
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "node"
-  ) {
-
-    if (isBlank) {
-
-      openBlankNodeEditor(
-        point
-      );
-
-    } else {
-
-      openMainNodeEditor(
-        point,
-        wrapElement
-      );
-    }
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     EDGE
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "edge" ||
-    state.tool === "directed"
-  ) {
-
-    const node =
-      nodeAt(
-        state,
-        point
-      );
-
-    if (!node) {
-
-      state.edgeStartNodeId =
-        null;
-
-      redrawAll();
-
-      return;
-    }
-
-    if (
-      !state.edgeStartNodeId
-    ) {
-
-      state.edgeStartNodeId =
-        node.id;
-
-      state.selectedId =
-        node.id;
-
-      redrawAll();
-
-      return;
-    }
-
-    if (
-      state.edgeStartNodeId ===
-      node.id
-    ) {
-      return;
-    }
-
-    saveHistory(state);
-
-    state.objects.push({
-      id: makeId(),
-
-      type:
-        state.tool === "directed"
-          ? "directed"
-          : "edge",
-
-      from:
-        state.edgeStartNodeId,
-
-      to:
-        node.id,
-
-      weight: ""
-    });
-
-    state.edgeStartNodeId =
-      null;
-
-    state.selectedId =
-      null;
-
-    redrawAll();
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     WEIGHT
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "weight"
-  ) {
-
-    const edge =
-      edgeAt(
-        state,
-        point
-      );
-
-    if (!edge) {
-      return;
-    }
-
-    if (isBlank) {
-
-      openBlankWeightEditor(
-        edge
-      );
-
-    } else {
-
-      openMainWeightEditor(
-        edge,
-        wrapElement
-      );
-    }
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     TEXT
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "text"
-  ) {
-
-    if (isBlank) {
-
-      openBlankTextEditor(
-        point
-      );
-
-    } else {
-
-      openMainTextEditor(
-        point,
-        wrapElement
-      );
-    }
-
-    return;
-  }
-
-
-  /* -------------------------------------------------------
-     SELECT
-     ------------------------------------------------------- */
-
-  if (
-    state.tool === "select"
-  ) {
-
-    const target =
-      objectAt(
-        state,
-        point
-      );
-
-    if (!target) {
-
-      state.selectedId =
-        null;
-
-      redrawAll();
-
-      return;
-    }
-
-    state.selectedId =
-      target.id;
-
-    if (
-      target.type === "node"
-    ) {
-
-      saveHistory(state);
-
-      dragState = {
-        state,
-
-        canvasElement,
-
-        nodeId:
-          target.id,
-
-        offsetX:
-          point.x -
-          target.x,
-
-        offsetY:
-          point.y -
-          target.y
-      };
-
-      canvasElement.setPointerCapture(
-        event.pointerId
-      );
-    }
-
-    redrawAll();
-  }
-}
-
-
-function handlePointerMove(
-  event,
-  canvasElement
-) {
-  if (
-    !drawingStroke &&
-    !dragState
-  ) {
-    return;
-  }
-
-  const point =
-    getPoint(
-      event,
-      canvasElement
-    );
-
-  if (drawingStroke) {
-
-    drawingStroke.points.push(
-      point
-    );
-
-    redrawAll();
-
-    return;
-  }
-
-  if (dragState) {
-
-    const node =
-      getNode(
-        dragState.state,
-        dragState.nodeId
-      );
-
-    if (!node) {
-      return;
-    }
-
-    node.x =
-      point.x -
-      dragState.offsetX;
-
-    node.y =
-      point.y -
-      dragState.offsetY;
-
-    redrawAll();
-  }
-}
-
-
-function handlePointerUp(
-  event,
-  canvasElement
-) {
-
-  if (drawingStroke) {
-
-    if (
-      drawingStroke.points.length >
-      1
-    ) {
-
-      drawingStroke.state.objects.push(
-        drawingStroke
-      );
-    }
-
-    drawingStroke =
-      null;
-
-    try {
-      canvasElement.releasePointerCapture(
-        event.pointerId
-      );
-    } catch {}
-
-    redrawAll();
-  }
-
-
-  if (dragState) {
-
-    dragState =
-      null;
-
-    try {
-      canvasElement.releasePointerCapture(
-        event.pointerId
-      );
-    } catch {}
-
-    redrawAll();
-  }
-}
-
-
-function handlePointerCancel() {
-
-  drawingStroke =
-    null;
-
-  dragState =
-    null;
-
-  redrawAll();
-}
-
-
-/* Main board */
-
-board.addEventListener(
-  "pointerdown",
-  event =>
-    handlePointerDown(
-      event,
-      mainState,
-      board,
-      boardWrap,
-      false
-    )
-);
-
-board.addEventListener(
-  "pointermove",
-  event =>
-    handlePointerMove(
-      event,
-      board
-    )
-);
-
-board.addEventListener(
-  "pointerup",
-  event =>
-    handlePointerUp(
-      event,
-      board
-    )
-);
-
-board.addEventListener(
-  "pointercancel",
-  handlePointerCancel
-);
-
-
-/* Existing-work split board */
-
-splitBoard.addEventListener(
-  "pointerdown",
-  event =>
-    handlePointerDown(
-      event,
-      mainState,
-      splitBoard,
-      splitBoardWrap,
-      false
-    )
-);
-
-splitBoard.addEventListener(
-  "pointermove",
-  event =>
-    handlePointerMove(
-      event,
-      splitBoard
-    )
-);
-
-splitBoard.addEventListener(
-  "pointerup",
-  event =>
-    handlePointerUp(
-      event,
-      splitBoard
-    )
-);
-
-splitBoard.addEventListener(
-  "pointercancel",
-  handlePointerCancel
-);
-
-
-/* Blank split board */
-
-blankBoard.addEventListener(
-  "pointerdown",
-  event =>
-    handlePointerDown(
-      event,
-      blankState,
-      blankBoard,
-      blankBoardWrap,
-      true
-    )
-);
-
-blankBoard.addEventListener(
-  "pointermove",
-  event =>
-    handlePointerMove(
-      event,
-      blankBoard
-    )
-);
-
-blankBoard.addEventListener(
-  "pointerup",
-  event =>
-    handlePointerUp(
-      event,
-      blankBoard
-    )
-);
-
-blankBoard.addEventListener(
-  "pointercancel",
-  handlePointerCancel
-);
-
-
-/* =========================================================
-   UNDO / REDO
-   ========================================================= */
-
-document
-  .getElementById(
-    "undo"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      if (
-        !mainState.history.length
-      ) {
+      if (!state.objects.length) {
         return;
       }
 
-      mainState.future.push(
-        cloneObjects(
-          mainState.objects
-        )
-      );
+      const before = snapshot();
 
-      const previous =
-        mainState.history.pop();
+      state.objects = [];
 
-      restoreObjects(
-        mainState,
-        previous
-      );
+      state.selectedId = null;
+
+      pendingEdgeNodeId = null;
+
+      state.history.push(before);
+
+      state.future = [];
+
+      draw();
+
     }
   );
 
 
-document
-  .getElementById(
-    "redo"
-  )
-  .addEventListener(
+  textAdd.addEventListener(
+    "click",
+    addText
+  );
+
+
+  textCancel.addEventListener(
     "click",
     () => {
-
-      if (
-        !mainState.future.length
-      ) {
-        return;
-      }
-
-      mainState.history.push(
-        cloneObjects(
-          mainState.objects
-        )
-      );
-
-      const next =
-        mainState.future.pop();
-
-      restoreObjects(
-        mainState,
-        next
-      );
+      pendingTextPosition = null;
+      hideEditors();
     }
   );
 
 
-/* =========================================================
-   DELETE
-   ========================================================= */
+  nodeAdd.addEventListener(
+    "click",
+    addNode
+  );
 
-document
-  .getElementById(
-    "deleteSelected"
-  )
-  .addEventListener(
+
+  nodeCancel.addEventListener(
     "click",
     () => {
+      pendingNodePosition = null;
+      hideEditors();
+    }
+  );
 
-      if (
-        !mainState.selectedId
-      ) {
-        return;
-      }
 
-      saveHistory(
-        mainState
-      );
+  weightAdd.addEventListener(
+    "click",
+    applyWeight
+  );
 
-      const selectedId =
-        mainState.selectedId;
 
-      mainState.objects =
-        mainState.objects.filter(
-          object => {
+  weightCancel.addEventListener(
+    "click",
+    () => {
+      pendingWeightId = null;
+      hideEditors();
+    }
+  );
 
-            if (
-              object.id ===
-              selectedId
-            ) {
-              return false;
+
+  [textInput, nodeInput, weightInput]
+    .forEach(input => {
+
+      input.addEventListener(
+        "keydown",
+        event => {
+
+          if (event.key === "Enter") {
+
+            event.preventDefault();
+
+            if (input === textInput) {
+              addText();
             }
 
-            if (
-              object.type === "edge" ||
-              object.type === "directed"
-            ) {
-
-              return (
-                object.from !==
-                  selectedId &&
-                object.to !==
-                  selectedId
-              );
+            if (input === nodeInput) {
+              addNode();
             }
 
-            return true;
+            if (input === weightInput) {
+              applyWeight();
+            }
+
           }
-        );
 
-      mainState.selectedId =
-        null;
+          if (event.key === "Escape") {
 
-      redrawAll();
-    }
-  );
+            event.preventDefault();
 
+            hideEditors();
 
-/* =========================================================
-   CLEAR HELPERS
-   ========================================================= */
+          }
 
-function clearMainBoard() {
-
-  mainState.objects = [];
-
-  mainState.selectedId =
-    null;
-
-  mainState.history = [];
-  mainState.future = [];
-
-  mainState.edgeStartNodeId =
-    null;
-
-  redrawAll();
-}
-
-
-function clearMainNotes() {
-
-  notes.innerHTML = "";
-
-  savedNotesRange =
-    null;
-}
-
-
-function clearBlankBoard() {
-
-  blankState.objects = [];
-
-  blankState.selectedId =
-    null;
-
-  blankState.history = [];
-  blankState.future = [];
-
-  blankState.edgeStartNodeId =
-    null;
-
-  redrawAll();
-}
-
-
-function clearBlankNotes() {
-
-  blankNotes.innerHTML = "";
-
-  savedBlankNotesRange =
-    null;
-}
-
-
-/* =========================================================
-   INLINE CONFIRMATION
-   ========================================================= */
-
-let pendingConfirmation =
-  null;
-
-
-function showConfirmation(
-  message,
-  action
-) {
-  document
-    .getElementById(
-      "confirmMessage"
-    )
-    .textContent =
-    message;
-
-  pendingConfirmation =
-    action;
-
-  document
-    .getElementById(
-      "confirmEditor"
-    )
-    .hidden = false;
-}
-
-
-function hideConfirmation() {
-
-  document
-    .getElementById(
-      "confirmEditor"
-    )
-    .hidden = true;
-
-  pendingConfirmation =
-    null;
-}
-
-
-document
-  .getElementById(
-    "confirmYes"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      const action =
-        pendingConfirmation;
-
-      hideConfirmation();
-
-      if (action) {
-        action();
-      }
-    }
-  );
-
-
-document
-  .getElementById(
-    "confirmNo"
-  )
-  .addEventListener(
-    "click",
-    hideConfirmation
-  );
-
-
-document
-  .getElementById(
-    "clearBoard"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      if (
-        !mainState.objects.length
-      ) {
-        return;
-      }
-
-      showConfirmation(
-        "Clear everything on the whiteboard?",
-        clearMainBoard
-      );
-    }
-  );
-
-
-document
-  .getElementById(
-    "clearNotes"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      if (
-        !notes.innerHTML.trim()
-      ) {
-        return;
-      }
-
-      showConfirmation(
-        "Clear all scratch notes?",
-        clearMainNotes
-      );
-    }
-  );
-
-
-document
-  .getElementById(
-    "clearAll"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      const hasMainBoard =
-        mainState.objects.length > 0;
-
-      const hasMainNotes =
-        notes.innerHTML.trim()
-          .length > 0;
-
-      const hasBlankBoard =
-        blankState.objects.length > 0;
-
-      const hasBlankNotes =
-        blankNotes.innerHTML.trim()
-          .length > 0;
-
-      if (
-        !hasMainBoard &&
-        !hasMainNotes &&
-        !hasBlankBoard &&
-        !hasBlankNotes
-      ) {
-        return;
-      }
-
-      showConfirmation(
-        "Clear all whiteboards and notes?",
-        () => {
-
-          clearMainBoard();
-          clearMainNotes();
-
-          clearBlankBoard();
-          clearBlankNotes();
         }
       );
-    }
+
+    });
+
+
+  canvas.addEventListener(
+    "pointerdown",
+    pointerDown
+  );
+
+  canvas.addEventListener(
+    "pointermove",
+    pointerMove
+  );
+
+  canvas.addEventListener(
+    "pointerup",
+    pointerUp
+  );
+
+  canvas.addEventListener(
+    "pointercancel",
+    pointerCancel
   );
 
 
-/* =========================================================
-   TABLE CREATION
-   ========================================================= */
+  window.addEventListener(
+    "resize",
+    resize
+  );
 
-function createTable(
-  rows,
-  columns
-) {
-  const table =
-    document.createElement(
-      "table"
-    );
 
-  for (
-    let r = 0;
-    r < rows;
-    r++
-  ) {
+  resize();
 
-    const row =
-      document.createElement(
-        "tr"
+
+  return {
+
+    resize,
+
+    clear() {
+
+      if (!state.objects.length) {
+        return;
+      }
+
+      state.history.push(
+        snapshot()
       );
 
-    for (
-      let c = 0;
-      c < columns;
-      c++
-    ) {
+      state.objects = [];
 
-      const cell =
-        document.createElement(
-          "td"
-        );
+      state.selectedId = null;
 
-      cell.contentEditable =
-        "true";
+      state.future = [];
 
-      cell.innerHTML =
-        "&nbsp;";
+      draw();
 
-      row.appendChild(
-        cell
+    },
+
+    getCanvas() {
+      return canvas;
+    },
+
+    getObjects() {
+      return deepClone(state.objects);
+    },
+
+    downloadPNG(filename) {
+
+      canvas.toBlob(
+        blob => {
+
+          if (blob) {
+            downloadBlob(
+              blob,
+              filename
+            );
+          }
+
+        },
+        "image/png"
       );
+
     }
 
-    table.appendChild(
-      row
-    );
-  }
+  };
 
-  return table;
 }
 
 
-function insertTableAtSavedPosition(
-  editor,
-  savedRange,
-  rows,
-  columns,
-  updateRange
-) {
-  editor.focus();
+/* =========================================================
+   PRIMARY WHITEBOARD
+   ========================================================= */
 
-  let range = null;
+const mainBoard =
+  createWhiteboard({
 
-  if (savedRange) {
+    canvas:
+      document.getElementById("board"),
+
+    boardWrap:
+      document.getElementById("boardWrap"),
+
+    toolButtons:
+      document.querySelectorAll(
+        '.tool[data-workspace="main"]'
+      ),
+
+    colorInput:
+      document.getElementById("strokeColor"),
+
+    sizeInput:
+      document.getElementById("strokeSize"),
+
+    undoButton:
+      document.getElementById("undo"),
+
+    redoButton:
+      document.getElementById("redo"),
+
+    deleteButton:
+      document.getElementById("deleteSelected"),
+
+    clearButton:
+      document.getElementById("clearBoard"),
+
+    toolHelp:
+      document.getElementById("toolHelp"),
+
+    textEditor:
+      document.getElementById("textEditor"),
+
+    textInput:
+      document.getElementById("textInput"),
+
+    textAdd:
+      document.getElementById("textAdd"),
+
+    textCancel:
+      document.getElementById("textCancel"),
+
+    nodeEditor:
+      document.getElementById("nodeEditor"),
+
+    nodeInput:
+      document.getElementById("nodeInput"),
+
+    nodeAdd:
+      document.getElementById("nodeAdd"),
+
+    nodeCancel:
+      document.getElementById("nodeCancel"),
+
+    weightEditor:
+      document.getElementById("weightEditor"),
+
+    weightInput:
+      document.getElementById("weightInput"),
+
+    weightAdd:
+      document.getElementById("weightAdd"),
+
+    weightCancel:
+      document.getElementById("weightCancel")
+
+  });
+
+
+/* =========================================================
+   BLANK WHITEBOARD
+   ========================================================= */
+
+const blankBoard =
+  createWhiteboard({
+
+    canvas:
+      document.getElementById("blankBoard"),
+
+    boardWrap:
+      document.getElementById("blankBoardWrap"),
+
+    toolButtons:
+      document.querySelectorAll(
+        '.tool[data-workspace="blank"]'
+      ),
+
+    colorInput:
+      document.getElementById("blankStrokeColor"),
+
+    sizeInput:
+      document.getElementById("blankStrokeSize"),
+
+    undoButton:
+      document.getElementById("blankUndo"),
+
+    redoButton:
+      document.getElementById("blankRedo"),
+
+    deleteButton:
+      document.getElementById(
+        "blankDeleteSelected"
+      ),
+
+    clearButton:
+      document.getElementById("blankClearBoard"),
+
+    toolHelp:
+      document.getElementById("blankToolHelp"),
+
+    textEditor:
+      document.getElementById("blankTextEditor"),
+
+    textInput:
+      document.getElementById("blankTextInput"),
+
+    textAdd:
+      document.getElementById("blankTextAdd"),
+
+    textCancel:
+      document.getElementById(
+        "blankTextCancel"
+      ),
+
+    nodeEditor:
+      document.getElementById("blankNodeEditor"),
+
+    nodeInput:
+      document.getElementById("blankNodeInput"),
+
+    nodeAdd:
+      document.getElementById("blankNodeAdd"),
+
+    nodeCancel:
+      document.getElementById(
+        "blankNodeCancel"
+      ),
+
+    weightEditor:
+      document.getElementById("blankWeightEditor"),
+
+    weightInput:
+      document.getElementById("blankWeightInput"),
+
+    weightAdd:
+      document.getElementById("blankWeightAdd"),
+
+    weightCancel:
+      document.getElementById(
+        "blankWeightCancel"
+      )
+
+  });
+
+
+/* =========================================================
+   NOTEPAD FACTORY
+   ========================================================= */
+
+function createNotepad(config) {
+
+  const {
+    notes,
+    insertTableButton,
+    clearNotesButton,
+    tableEditor,
+    tableRows,
+    tableColumns,
+    tableInsertButton,
+    tableCancelButton
+  } = config;
+
+
+  let savedRange = null;
+
+
+  function saveSelection() {
+
+    const selection =
+      window.getSelection();
 
     if (
-      restoreSelection(
-        savedRange
+      !selection ||
+      !selection.rangeCount
+    ) {
+      return;
+    }
+
+    const range =
+      selection.getRangeAt(0);
+
+    if (
+      notes.contains(
+        range.commonAncestorContainer
       )
     ) {
-      range =
-        savedRange.cloneRange();
+
+      savedRange =
+        range.cloneRange();
+
     }
+
   }
 
 
-  /*
-    No remembered cursor:
-    put the table at the end.
-  */
+  function restoreSelection() {
 
-  if (!range) {
-
-    range =
-      document.createRange();
-
-    range.selectNodeContents(
-      editor
-    );
-
-    range.collapse(false);
-  }
-
-
-  /*
-    Prevent nested tables.
-  */
-
-  let container =
-    range.startContainer;
-
-  if (
-    container.nodeType ===
-    Node.TEXT_NODE
-  ) {
-    container =
-      container.parentElement;
-  }
-
-  const containingTable =
-    container?.closest?.(
-      "table"
-    );
-
-  if (containingTable) {
-
-    range.selectNode(
-      containingTable
-    );
-
-    range.collapse(false);
-  }
-
-
-  /*
-    Replace selected text, if any.
-  */
-
-  range.deleteContents();
-
-
-  const table =
-    createTable(
-      rows,
-      columns
-    );
-
-
-  range.insertNode(
-    table
-  );
-
-
-  /*
-    Blank paragraph after table.
-  */
-
-  const paragraph =
-    document.createElement(
-      "div"
-    );
-
-  paragraph.innerHTML =
-    "<br>";
-
-  table.parentNode.insertBefore(
-    paragraph,
-    table.nextSibling
-  );
-
-
-  /*
-    Put cursor into first cell.
-  */
-
-  const firstCell =
-    table.querySelector(
-      "td"
-    );
-
-  if (firstCell) {
-
-    firstCell.focus();
-
-    const cellRange =
-      document.createRange();
-
-    cellRange.selectNodeContents(
-      firstCell
-    );
-
-    cellRange.collapse(true);
+    if (!savedRange) {
+      return false;
+    }
 
     const selection =
       window.getSelection();
@@ -3365,319 +1991,345 @@ function insertTableAtSavedPosition(
     selection.removeAllRanges();
 
     selection.addRange(
-      cellRange
+      savedRange.cloneRange()
     );
 
-    updateRange(
-      cellRange.cloneRange()
-    );
+    return true;
   }
-}
 
 
-/* =========================================================
-   MAIN TABLE
-   ========================================================= */
+  function placeCaretAtEnd() {
 
-const tableEditor =
-  document.getElementById(
-    "tableEditor"
-  );
+    notes.focus();
 
+    const range =
+      document.createRange();
 
-document
-  .getElementById(
-    "insertTable"
-  )
-  .addEventListener(
-    "click",
-    () => {
+    range.selectNodeContents(notes);
 
-      /*
-        Save cursor BEFORE button focus.
-      */
+    range.collapse(false);
 
-      saveMainNotesSelection();
+    const selection =
+      window.getSelection();
 
-      tableEditor.hidden =
-        false;
+    selection.removeAllRanges();
 
-      const rows =
-        document.getElementById(
-          "tableRows"
-        );
-
-      rows.focus();
-      rows.select();
-    }
-  );
+    selection.addRange(range);
+  }
 
 
-document
-  .getElementById(
-    "tableCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
+  function insertTable() {
 
-      tableEditor.hidden =
-        true;
+    let rows =
+      Number(tableRows.value);
 
-      notes.focus();
+    let columns =
+      Number(tableColumns.value);
 
-      restoreSelection(
-        savedNotesRange
+    rows =
+      Math.max(
+        1,
+        Math.min(30, rows)
       );
-    }
-  );
 
-
-document
-  .getElementById(
-    "tableInsert"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      const rows =
-        Math.max(
-          1,
-          Math.min(
-            30,
-            Number(
-              document
-                .getElementById(
-                  "tableRows"
-                )
-                .value
-            ) || 1
-          )
-        );
-
-      const columns =
-        Math.max(
-          1,
-          Math.min(
-            20,
-            Number(
-              document
-                .getElementById(
-                  "tableColumns"
-                )
-                .value
-            ) || 1
-          )
-        );
-
-      tableEditor.hidden =
-        true;
-
-      insertTableAtSavedPosition(
-        notes,
-        savedNotesRange,
-        rows,
-        columns,
-        range => {
-          savedNotesRange =
-            range;
-        }
+    columns =
+      Math.max(
+        1,
+        Math.min(20, columns)
       );
+
+
+    const table =
+      document.createElement("table");
+
+
+    for (let r = 0; r < rows; r++) {
+
+      const row =
+        document.createElement("tr");
+
+      for (let c = 0; c < columns; c++) {
+
+        const cell =
+          document.createElement("td");
+
+        cell.contentEditable = "true";
+
+        cell.tabIndex = 0;
+
+        cell.innerHTML = "";
+
+        row.appendChild(cell);
+
+      }
+
+      table.appendChild(row);
+
     }
-  );
 
 
-/* =========================================================
-   BLANK TABLE
-   ========================================================= */
-
-const blankTableEditor =
-  document.getElementById(
-    "blankTableEditor"
-  );
+    notes.focus();
 
 
-document
-  .getElementById(
-    "blankInsertTable"
-  )
-  .addEventListener(
-    "click",
-    () => {
+    const restored =
+      restoreSelection();
 
-      saveBlankNotesSelection();
 
-      blankTableEditor.hidden =
-        false;
+    let range;
 
-      const rows =
-        document.getElementById(
-          "blankTableRows"
-        );
+    if (
+      restored &&
+      savedRange &&
+      notes.contains(
+        savedRange.commonAncestorContainer
+      )
+    ) {
 
-      rows.focus();
-      rows.select();
+      range =
+        window.getSelection()
+          .getRangeAt(0);
+
+    } else {
+
+      placeCaretAtEnd();
+
+      range =
+        window.getSelection()
+          .getRangeAt(0);
+
     }
-  );
 
 
-document
-  .getElementById(
-    "blankTableCancel"
-  )
-  .addEventListener(
-    "click",
-    () => {
+    /*
+      Prevent inserting a table inside
+      an existing table cell.
+    */
 
-      blankTableEditor.hidden =
-        true;
+    let startElement =
+      range.startContainer;
 
-      blankNotes.focus();
+    if (
+      startElement.nodeType !== 1
+    ) {
+      startElement =
+        startElement.parentElement;
+    }
 
-      restoreSelection(
-        savedBlankNotesRange
+
+    const containingCell =
+      startElement?.closest?.("td");
+
+
+    if (containingCell) {
+
+      const containingTable =
+        containingCell.closest("table");
+
+      containingTable.after(table);
+
+    } else {
+
+      range.deleteContents();
+
+      range.insertNode(table);
+
+    }
+
+
+    const spacer =
+      document.createElement("p");
+
+    spacer.innerHTML = "<br>";
+
+    table.after(spacer);
+
+
+    const firstCell =
+      table.querySelector("td");
+
+
+    if (firstCell) {
+
+      firstCell.focus();
+
+      const cellRange =
+        document.createRange();
+
+      cellRange.selectNodeContents(
+        firstCell
       );
+
+      cellRange.collapse(true);
+
+      const selection =
+        window.getSelection();
+
+      selection.removeAllRanges();
+
+      selection.addRange(cellRange);
+
     }
+
+
+    tableEditor.hidden = true;
+
+    savedRange = null;
+
+  }
+
+
+  function showTableEditor() {
+
+    saveSelection();
+
+    tableEditor.hidden = false;
+
+    tableRows.focus();
+
+    tableRows.select();
+
+  }
+
+
+  function cancelTableEditor() {
+
+    tableEditor.hidden = true;
+
+    notes.focus();
+
+    restoreSelection();
+
+  }
+
+
+  function clear() {
+
+    notes.innerHTML = "";
+
+    savedRange = null;
+
+  }
+
+
+  insertTableButton.addEventListener(
+    "click",
+    showTableEditor
   );
 
 
-document
-  .getElementById(
-    "blankTableInsert"
-  )
-  .addEventListener(
+  tableInsertButton.addEventListener(
     "click",
+    insertTable
+  );
+
+
+  tableCancelButton.addEventListener(
+    "click",
+    cancelTableEditor
+  );
+
+
+  clearNotesButton.addEventListener(
+    "click",
+    clear
+  );
+
+
+  document.addEventListener(
+    "selectionchange",
     () => {
 
-      const rows =
-        Math.max(
-          1,
-          Math.min(
-            30,
-            Number(
-              document
-                .getElementById(
-                  "blankTableRows"
-                )
-                .value
-            ) || 1
-          )
-        );
+      const selection =
+        window.getSelection();
 
-      const columns =
-        Math.max(
-          1,
-          Math.min(
-            20,
-            Number(
-              document
-                .getElementById(
-                  "blankTableColumns"
-                )
-                .value
-            ) || 1
-          )
-        );
+      if (
+        !selection ||
+        !selection.rangeCount
+      ) {
+        return;
+      }
 
-      blankTableEditor.hidden =
-        true;
+      const range =
+        selection.getRangeAt(0);
 
-      insertTableAtSavedPosition(
-        blankNotes,
-        savedBlankNotesRange,
-        rows,
-        columns,
-        range => {
-          savedBlankNotesRange =
-            range;
-        }
-      );
+      if (
+        notes.contains(
+          range.commonAncestorContainer
+        )
+      ) {
+
+        savedRange =
+          range.cloneRange();
+
+      }
+
     }
   );
 
 
-/* =========================================================
-   TABLE TAB NAVIGATION
-   ========================================================= */
-
-function setupTableNavigation(
-  editor,
-  updateRange
-) {
-  editor.addEventListener(
+  notes.addEventListener(
     "keydown",
     event => {
 
-      if (
-        event.key !== "Tab"
-      ) {
+      if (event.key !== "Tab") {
         return;
       }
-
-      const target =
-        event.target;
-
-      if (
-        !target ||
-        target.tagName !== "TD"
-      ) {
-        return;
-      }
-
-      event.preventDefault();
 
       const cell =
-        target;
+        event.target.closest?.("td");
 
-      const row =
-        cell.parentElement;
+      if (
+        !cell ||
+        !notes.contains(cell)
+      ) {
+        return;
+      }
 
       const table =
-        row.parentElement;
+        cell.closest("table");
 
       const cells =
         Array.from(
-          table.querySelectorAll(
-            "td"
-          )
+          table.querySelectorAll("td")
         );
 
       const index =
-        cells.indexOf(
-          cell
-        );
+        cells.indexOf(cell);
 
-      if (
-        index === -1
-      ) {
+
+      event.preventDefault();
+
+
+      if (event.shiftKey) {
+
+        if (index > 0) {
+          cells[index - 1].focus();
+        }
+
         return;
+
       }
 
 
-      if (
-        index <
-        cells.length - 1
-      ) {
+      if (index < cells.length - 1) {
 
         cells[index + 1].focus();
 
         return;
+
       }
 
 
       /*
-        Tab out of the final cell:
-        automatically create another row.
+        Tab from the final cell creates
+        another row.
       */
 
       const columnCount =
-        row.children.length;
+        table.rows[0].cells.length;
 
-      const newRow =
-        document.createElement(
-          "tr"
-        );
+      const row =
+        table.insertRow();
 
       for (
         let i = 0;
@@ -3686,564 +2338,398 @@ function setupTableNavigation(
       ) {
 
         const newCell =
-          document.createElement(
-            "td"
-          );
+          row.insertCell();
 
-        newCell.contentEditable =
-          "true";
+        newCell.contentEditable = "true";
 
-        newCell.innerHTML =
-          "&nbsp;";
+        newCell.tabIndex = 0;
 
-        newRow.appendChild(
-          newCell
-        );
       }
 
-      table.appendChild(
-        newRow
-      );
 
+      row.cells[0].focus();
 
-      const firstNewCell =
-        newRow.querySelector(
-          "td"
-        );
-
-      if (firstNewCell) {
-
-        firstNewCell.focus();
-
-        const range =
-          document.createRange();
-
-        range.selectNodeContents(
-          firstNewCell
-        );
-
-        range.collapse(true);
-
-        const selection =
-          window.getSelection();
-
-        selection.removeAllRanges();
-
-        selection.addRange(
-          range
-        );
-
-        updateRange(
-          range.cloneRange()
-        );
-      }
     }
   );
+
+
+  notes.addEventListener(
+    "mouseup",
+    saveSelection
+  );
+
+  notes.addEventListener(
+    "keyup",
+    saveSelection
+  );
+
+  notes.addEventListener(
+    "focus",
+    saveSelection
+  );
+
+
+  return {
+
+    clear,
+
+    getHTML() {
+      return notes.innerHTML;
+    }
+
+  };
+
 }
 
 
-setupTableNavigation(
-  notes,
-  range => {
-    savedNotesRange =
-      range;
-  }
-);
+/* =========================================================
+   PRIMARY NOTEPAD
+   ========================================================= */
 
+const mainNotes =
+  createNotepad({
 
-setupTableNavigation(
-  blankNotes,
-  range => {
-    savedBlankNotesRange =
-      range;
-  }
-);
+    notes:
+      document.getElementById("notes"),
+
+    insertTableButton:
+      document.getElementById("insertTable"),
+
+    clearNotesButton:
+      document.getElementById("clearNotes"),
+
+    tableEditor:
+      document.getElementById("tableEditor"),
+
+    tableRows:
+      document.getElementById("tableRows"),
+
+    tableColumns:
+      document.getElementById("tableColumns"),
+
+    tableInsertButton:
+      document.getElementById("tableInsert"),
+
+    tableCancelButton:
+      document.getElementById("tableCancel")
+
+  });
 
 
 /* =========================================================
-   SPLIT VIEW RESIZER
+   BLANK NOTEPAD
    ========================================================= */
 
-document
-  .querySelectorAll(
-    ".split-workspace"
-  )
-  .forEach(workspace => {
+const blankNotes =
+  createNotepad({
 
-    const divider =
-      workspace.querySelector(
-        ".split-divider"
+    notes:
+      document.getElementById("blankNotes"),
+
+    insertTableButton:
+      document.getElementById("blankInsertTable"),
+
+    clearNotesButton:
+      document.getElementById("blankClearNotes"),
+
+    tableEditor:
+      document.getElementById("blankTableEditor"),
+
+    tableRows:
+      document.getElementById("blankTableRows"),
+
+    tableColumns:
+      document.getElementById("blankTableColumns"),
+
+    tableInsertButton:
+      document.getElementById("blankTableInsert"),
+
+    tableCancelButton:
+      document.getElementById("blankTableCancel")
+
+  });
+
+
+/* =========================================================
+   TAB / VIEW MANAGEMENT
+   ========================================================= */
+
+const mainWorkspace =
+  document.getElementById(
+    "mainWorkspace"
+  );
+
+const whiteboardPanel =
+  document.getElementById(
+    "whiteboard"
+  );
+
+const notepadPanel =
+  document.getElementById(
+    "notepad"
+  );
+
+const blankSplitPanel =
+  document.getElementById(
+    "blankSplit"
+  );
+
+const tabs =
+  document.querySelectorAll(".tab");
+
+
+function setView(view) {
+
+  /*
+    Remove all special layout states.
+  */
+
+  mainWorkspace.classList.remove(
+    "existing-split"
+  );
+
+
+  /*
+    Hide everything first.
+  */
+
+  whiteboardPanel.classList.remove(
+    "active-panel"
+  );
+
+  notepadPanel.classList.remove(
+    "active-panel"
+  );
+
+  blankSplitPanel.classList.remove(
+    "active-panel"
+  );
+
+
+  tabs.forEach(tab => {
+
+    tab.classList.toggle(
+      "active",
+      tab.dataset.tab === view
+    );
+
+  });
+
+
+  if (view === "whiteboard") {
+
+    whiteboardPanel.classList.add(
+      "active-panel"
+    );
+
+  }
+
+
+  if (view === "notepad") {
+
+    notepadPanel.classList.add(
+      "active-panel"
+    );
+
+  }
+
+
+  if (view === "split") {
+
+    /*
+      THIS IS THE IMPORTANT PART.
+
+      We do NOT display another copy.
+
+      We simply display the SAME
+      whiteboard and notepad side-by-side.
+    */
+
+    mainWorkspace.classList.add(
+      "existing-split"
+    );
+
+    whiteboardPanel.classList.add(
+      "active-panel"
+    );
+
+    notepadPanel.classList.add(
+      "active-panel"
+    );
+
+  }
+
+
+  if (view === "blankSplit") {
+
+    blankSplitPanel.classList.add(
+      "active-panel"
+    );
+
+  }
+
+
+  /*
+    A canvas that was hidden may have had
+    a zero-sized bounding rectangle.
+
+    Resize after the browser has applied
+    the new layout.
+  */
+
+  requestAnimationFrame(() => {
+
+    mainBoard.resize();
+
+    blankBoard.resize();
+
+  });
+
+}
+
+
+tabs.forEach(tab => {
+
+  tab.addEventListener(
+    "click",
+    () => {
+      setView(tab.dataset.tab);
+    }
+  );
+
+});
+
+
+/* =========================================================
+   CLEAR ALL EXISTING WORK
+   ========================================================= */
+
+const clearAll =
+  document.getElementById(
+    "clearAll"
+  );
+
+
+clearAll.addEventListener(
+  "click",
+  () => {
+
+    const confirmed =
+      window.confirm(
+        "Clear all existing whiteboard and notepad work?"
       );
 
-    const halves =
-      workspace.querySelectorAll(
-        ".split-half"
-      );
-
-    if (
-      !divider ||
-      halves.length !== 2
-    ) {
+    if (!confirmed) {
       return;
     }
 
-    let dragging = false;
+    mainBoard.clear();
 
+    mainNotes.clear();
 
-    function updateSplit(
-      event
-    ) {
-      const rect =
-        workspace.getBoundingClientRect();
-
-      const mobile =
-        window.innerWidth <= 800;
-
-      let ratio;
-
-      if (mobile) {
-
-        ratio =
-          (
-            event.clientY -
-            rect.top
-          ) /
-          rect.height;
-
-      } else {
-
-        ratio =
-          (
-            event.clientX -
-            rect.left
-          ) /
-          rect.width;
-      }
-
-      ratio =
-        Math.max(
-          0.2,
-          Math.min(
-            0.8,
-            ratio
-          )
-        );
-
-
-      if (mobile) {
-
-        halves[0].style.flex =
-          `0 0 ${ratio * 100}%`;
-
-        halves[1].style.flex =
-          `1 1 0`;
-
-      } else {
-
-        halves[0].style.flex =
-          `0 0 ${ratio * 100}%`;
-
-        halves[1].style.flex =
-          `1 1 0`;
-      }
-
-      resizeAllCanvases();
-    }
-
-
-    divider.addEventListener(
-      "pointerdown",
-      event => {
-
-        event.preventDefault();
-
-        dragging = true;
-
-        divider.setPointerCapture(
-          event.pointerId
-        );
-      }
-    );
-
-
-    divider.addEventListener(
-      "pointermove",
-      event => {
-
-        if (!dragging) {
-          return;
-        }
-
-        updateSplit(event);
-      }
-    );
-
-
-    divider.addEventListener(
-      "pointerup",
-      event => {
-
-        dragging = false;
-
-        try {
-          divider.releasePointerCapture(
-            event.pointerId
-          );
-        } catch {}
-      }
-    );
-
-
-    divider.addEventListener(
-      "pointercancel",
-      () => {
-        dragging = false;
-      }
-    );
-
-
-    divider.addEventListener(
-      "keydown",
-      event => {
-
-        if (
-          event.key !==
-          "ArrowLeft" &&
-          event.key !==
-          "ArrowRight" &&
-          event.key !==
-          "ArrowUp" &&
-          event.key !==
-          "ArrowDown"
-        ) {
-          return;
-        }
-
-        event.preventDefault();
-
-        const first =
-          halves[0];
-
-        const current =
-          parseFloat(
-            first.style.flexBasis
-          );
-
-        let percentage =
-          Number.isFinite(
-            current
-          )
-            ? current
-            : 50;
-
-        const mobile =
-          window.innerWidth <= 800;
-
-        if (
-          (!mobile &&
-            event.key ===
-              "ArrowLeft") ||
-          (mobile &&
-            event.key ===
-              "ArrowUp")
-        ) {
-          percentage -= 5;
-        }
-
-        if (
-          (!mobile &&
-            event.key ===
-              "ArrowRight") ||
-          (mobile &&
-            event.key ===
-              "ArrowDown")
-        ) {
-          percentage += 5;
-        }
-
-        percentage =
-          Math.max(
-            20,
-            Math.min(
-              80,
-              percentage
-            )
-          );
-
-        first.style.flex =
-          `0 0 ${percentage}%`;
-
-        halves[1].style.flex =
-          "1 1 0";
-
-        resizeAllCanvases();
-      }
-    );
-  });
+  }
+);
 
 
 /* =========================================================
-   TABS
+   DOWNLOAD EXISTING WORK
    ========================================================= */
 
-document
-  .querySelectorAll(
-    ".tab"
-  )
-  .forEach(tab => {
-
-    tab.addEventListener(
-      "click",
-      () => {
-
-        const target =
-          tab.dataset.tab;
-
-        document
-          .querySelectorAll(
-            ".tab"
-          )
-          .forEach(button => {
-
-            button.classList.toggle(
-              "active",
-              button === tab
-            );
-          });
-
-
-        document
-          .querySelectorAll(
-            ".panel"
-          )
-          .forEach(panel => {
-
-            panel.classList.remove(
-              "active-panel"
-            );
-          });
-
-
-        const panel =
-          document.getElementById(
-            target
-          );
-
-        panel.classList.add(
-          "active-panel"
-        );
-
-
-        /*
-          The important distinction:
-
-          Split View uses mainState.
-          Blank Split View uses blankState.
-
-          Therefore Split View is literally another
-          window into the student's existing work.
-        */
-
-        requestAnimationFrame(
-          () => {
-            resizeAllCanvases();
-          }
-        );
-      }
-    );
-  });
-
-
-/* =========================================================
-   DOWNLOAD
-   ========================================================= */
-
-document
-  .getElementById(
+const downloadAll =
+  document.getElementById(
     "downloadAll"
-  )
-  .addEventListener(
-    "click",
-    () => {
-
-      /*
-        Download the student's primary work,
-        not the blank scratch workspace.
-      */
-
-      const link =
-        document.createElement(
-          "a"
-        );
-
-      link.download =
-        "whiteboard.png";
-
-      link.href =
-        board.toDataURL(
-          "image/png"
-        );
-
-      link.click();
-
-
-      const html = `
-<!doctype html>
-
-<html>
-
-<head>
-
-<meta charset="utf-8">
-
-<title>Scratch Notes</title>
-
-<style>
-
-body {
-  font-family:
-    ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
-
-  line-height: 1.55;
-
-  padding: 24px;
-}
-
-table {
-  border-collapse: collapse;
-
-  margin: 12px 0;
-}
-
-td {
-  min-width: 90px;
-
-  height: 32px;
-
-  border: 1px solid #7b8794;
-
-  padding: 5px 8px;
-
-  vertical-align: top;
-}
-
-</style>
-
-</head>
-
-<body>
-
-${notes.innerHTML}
-
-</body>
-
-</html>
-`;
-
-
-      const blob =
-        new Blob(
-          [html],
-          {
-            type: "text/html"
-          }
-        );
-
-
-      const url =
-        URL.createObjectURL(
-          blob
-        );
-
-
-      const notesLink =
-        document.createElement(
-          "a"
-        );
-
-      notesLink.href =
-        url;
-
-      notesLink.download =
-        "scratch-notes.html";
-
-      notesLink.click();
-
-
-      setTimeout(
-        () => {
-
-          URL.revokeObjectURL(
-            url
-          );
-
-        },
-        1000
-      );
-    }
   );
 
 
+downloadAll.addEventListener(
+  "click",
+  () => {
+
+    /*
+      Only the student's EXISTING work
+      is downloaded.
+
+      Blank Split View is intentionally excluded.
+    */
+
+    mainBoard.downloadPNG(
+      "whiteboard.png"
+    );
+
+
+    const html =
+`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Scratch Notes</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  margin: 40px;
+}
+table {
+  border-collapse: collapse;
+}
+td {
+  border: 1px solid #777;
+  min-width: 90px;
+  min-height: 30px;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+</style>
+</head>
+<body>
+${mainNotes.getHTML()}
+</body>
+</html>`;
+
+
+    setTimeout(() => {
+
+      downloadText(
+        html,
+        "notes.html",
+        "text/html"
+      );
+
+    }, 150);
+
+  }
+);
+
+
 /* =========================================================
-   ESCAPE
+   INITIAL STATE
    ========================================================= */
+
+setView("whiteboard");
+
+
+/*
+  Escape closes floating editors.
+
+  This is intentionally NOT a keyboard shortcut
+  for an application command. It only dismisses
+  an editor that is already open.
+*/
 
 document.addEventListener(
   "keydown",
   event => {
 
-    if (
-      event.key !== "Escape"
-    ) {
+    if (event.key !== "Escape") {
       return;
     }
 
-    hideMainEditors();
-    hideBlankEditors();
-
     document
-      .getElementById(
-        "tableEditor"
+      .querySelectorAll(
+        ".floating-editor:not([hidden]), .table-editor:not([hidden])"
       )
-      .hidden = true;
+      .forEach(editor => {
+        editor.hidden = true;
+      });
 
-    document
-      .getElementById(
-        "blankTableEditor"
-      )
-      .hidden = true;
-
-    hideConfirmation();
-
-    mainState.edgeStartNodeId =
-      null;
-
-    blankState.edgeStartNodeId =
-      null;
-
-    redrawAll();
-  }
-);
-
-
-/* =========================================================
-   INITIALIZATION
-   ========================================================= */
-
-window.addEventListener(
-  "resize",
-  () => {
-    resizeAllCanvases();
-  }
-);
-
-
-requestAnimationFrame(
-  () => {
-    resizeAllCanvases();
   }
 );
