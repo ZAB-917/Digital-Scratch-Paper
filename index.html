@@ -78,7 +78,7 @@
 
 
   <!-- =====================================================
-       EXISTING WHITEBOARD
+       MAIN WHITEBOARD
        ===================================================== -->
 
   <section
@@ -92,64 +92,64 @@
 
         <button
           class="tool active"
-          data-workspace="main"
           data-tool="select"
+          title="Select and move objects"
         >
           Select
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="pen"
+          title="Freehand drawing"
         >
           Pen
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="eraser"
+          title="Erase freehand strokes"
         >
           Eraser
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="node"
+          title="Place a numbered graph node"
         >
           Node
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="edge"
+          title="Create an undirected edge"
         >
           Edge
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="directed"
+          title="Create a directed edge"
         >
           Directed Edge
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="weight"
+          title="Add or edit an edge weight"
         >
           Weight
         </button>
 
         <button
           class="tool"
-          data-workspace="main"
           data-tool="text"
+          title="Place text"
         >
           Text
         </button>
@@ -179,9 +179,17 @@
           >
         </label>
 
-        <button id="undo">Undo</button>
-        <button id="redo">Redo</button>
-        <button id="deleteSelected">Delete</button>
+        <button id="undo">
+          Undo
+        </button>
+
+        <button id="redo">
+          Redo
+        </button>
+
+        <button id="deleteSelected">
+          Delete
+        </button>
 
         <button
           id="clearBoard"
@@ -231,26 +239,13 @@
           placeholder="Enter text"
         >
 
-        <button id="textAdd">Add</button>
-        <button id="textCancel">Cancel</button>
+        <button id="textAdd">
+          Add
+        </button>
 
-      </div>
-
-
-      <div
-        id="nodeEditor"
-        class="floating-editor"
-        hidden
-      >
-
-        <input
-          id="nodeInput"
-          type="text"
-          placeholder="Node label"
-        >
-
-        <button id="nodeAdd">Apply</button>
-        <button id="nodeCancel">Cancel</button>
+        <button id="textCancel">
+          Cancel
+        </button>
 
       </div>
 
@@ -268,8 +263,13 @@
           placeholder="Weight"
         >
 
-        <button id="weightAdd">Apply</button>
-        <button id="weightCancel">Cancel</button>
+        <button id="weightAdd">
+          Apply
+        </button>
+
+        <button id="weightCancel">
+          Cancel
+        </button>
 
       </div>
 
@@ -302,7 +302,7 @@
 
 
   <!-- =====================================================
-       EXISTING NOTEPAD
+       MAIN NOTEPAD
        ===================================================== -->
 
   <section
@@ -403,8 +403,76 @@
 
 
   <!-- =====================================================
+       EXISTING WORK SPLIT VIEW
+       ===================================================== -->
+
+  <section
+    id="split"
+    class="panel split-panel"
+  >
+
+    <div class="split-workspace">
+
+      <div class="split-half">
+
+        <div class="split-title">
+          <strong>Whiteboard</strong>
+          <span>Existing work</span>
+        </div>
+
+        <div
+          id="splitBoardHost"
+          class="split-host"
+        ></div>
+
+      </div>
+
+
+      <div class="split-divider"></div>
+
+
+      <div class="split-half">
+
+        <div class="split-title">
+
+          <strong>Notepad</strong>
+
+          <span>
+            Existing work
+          </span>
+
+          <div class="split-note-actions">
+
+            <button id="splitInsertTable">
+              Insert Table
+            </button>
+
+            <button
+              id="splitClearNotes"
+              class="danger"
+            >
+              Clear
+            </button>
+
+          </div>
+
+        </div>
+
+        <div
+          id="splitNotesHost"
+          class="split-host"
+        ></div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- =====================================================
        BLANK SPLIT VIEW
-       This is genuinely independent from the existing work.
        ===================================================== -->
 
   <section
@@ -412,12 +480,9 @@
     class="panel split-panel"
   >
 
-    <div class="split-workspace blank-workspace">
+    <div class="split-workspace">
 
-
-      <!-- BLANK WHITEBOARD -->
-
-      <div class="split-half split-whiteboard">
+      <div class="split-half">
 
         <div class="split-title">
 
@@ -430,79 +495,67 @@
         </div>
 
 
-        <div
-          id="blankBoardToolbar"
-          class="toolbar blank-toolbar"
-        >
+        <div class="toolbar blank-toolbar">
 
           <div class="tool-group">
 
             <button
-              class="tool active"
-              data-workspace="blank"
+              class="blank-tool active"
               data-tool="select"
             >
               Select
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="pen"
             >
               Pen
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="eraser"
             >
               Eraser
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="node"
             >
               Node
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="edge"
             >
               Edge
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="directed"
             >
-              Directed
+              Directed Edge
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="weight"
             >
               Weight
             </button>
 
             <button
-              class="tool"
-              data-workspace="blank"
+              class="blank-tool"
               data-tool="text"
             >
               Text
             </button>
 
           </div>
-
 
           <div class="tool-group compact">
 
@@ -526,26 +579,31 @@
               >
             </label>
 
-            <button id="blankUndo">Undo</button>
-            <button id="blankRedo">Redo</button>
-            <button id="blankDeleteSelected">Delete</button>
+            <button id="blankUndo">
+              Undo
+            </button>
+
+            <button id="blankRedo">
+              Redo
+            </button>
+
+            <button id="blankDelete">
+              Delete
+            </button>
 
             <button
               id="blankClearBoard"
               class="danger"
             >
-              Clear
+              Clear Board
             </button>
 
           </div>
 
-
           <div class="help">
-
             <span id="blankToolHelp">
               Select and move objects.
             </span>
-
           </div>
 
         </div>
@@ -574,26 +632,13 @@
               placeholder="Enter text"
             >
 
-            <button id="blankTextAdd">Add</button>
-            <button id="blankTextCancel">Cancel</button>
+            <button id="blankTextAdd">
+              Add
+            </button>
 
-          </div>
-
-
-          <div
-            id="blankNodeEditor"
-            class="floating-editor"
-            hidden
-          >
-
-            <input
-              id="blankNodeInput"
-              type="text"
-              placeholder="Node label"
-            >
-
-            <button id="blankNodeAdd">Apply</button>
-            <button id="blankNodeCancel">Cancel</button>
+            <button id="blankTextCancel">
+              Cancel
+            </button>
 
           </div>
 
@@ -610,8 +655,13 @@
               placeholder="Weight"
             >
 
-            <button id="blankWeightAdd">Apply</button>
-            <button id="blankWeightCancel">Cancel</button>
+            <button id="blankWeightAdd">
+              Apply
+            </button>
+
+            <button id="blankWeightCancel">
+              Cancel
+            </button>
 
           </div>
 
@@ -623,9 +673,7 @@
       <div class="split-divider"></div>
 
 
-      <!-- BLANK NOTEPAD -->
-
-      <div class="split-half split-notepad">
+      <div class="split-half">
 
         <div class="split-title">
 
