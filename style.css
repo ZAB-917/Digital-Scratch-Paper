@@ -340,7 +340,6 @@ body.extra-spacing .info-panel { line-height: 2; letter-spacing: .035em; word-sp
   .toolbar-group { border-right: 0; padding-right: 0; }
 }
 
-/* Never display elements that JavaScript/HTML has marked as hidden. */
-[hidden] {
-  display: none !important;
-}
+
+/* Elements marked hidden must never leave an invisible modal overlay over the app. */
+[hidden] { display: none !important; }

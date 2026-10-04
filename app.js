@@ -175,7 +175,7 @@
   function createWhiteboard(root, ariaLabel) {
     root.innerHTML = "";
     const state = {
-      objects: [], selectedId: null, tool: "select", drawColor: "#000000", edgeColor: "#1d4ed8",
+      objects: [], selectedId: null, tool: "select", drawColor: "#000000", nodeColor: "#000000", edgeColor: "#1d4ed8",
       penSize: 3, nodeSize: 46, edgeSize: 3, history: [], future: [], edgeStart: null
     };
 
@@ -192,9 +192,11 @@
     const style = group();
     const drawColor = document.createElement("input"); drawColor.type="color"; drawColor.value=state.drawColor; drawColor.setAttribute("aria-label","Drawing color");
     const penSize = selectFrom([[1,"1px"],[2,"2px"],[3,"3px"],[5,"5px"],[8,"8px"],[12,"12px"]], 3, "Pen size");
+    const nodeColor = document.createElement("select"); nodeColor.setAttribute("aria-label","Node color"); fillColors(nodeColor,currentPalette(),state.nodeColor);
+    const nodeCustom = document.createElement("input"); nodeCustom.type="color"; nodeCustom.value=state.nodeColor; nodeCustom.setAttribute("aria-label","Custom node color");
     const edgeColor = document.createElement("select"); edgeColor.setAttribute("aria-label","Edge color"); fillColors(edgeColor,currentPalette(),state.edgeColor);
     const edgeCustom = document.createElement("input"); edgeCustom.type="color"; edgeCustom.value=state.edgeColor; edgeCustom.setAttribute("aria-label","Custom edge color");
-    style.append(label("Draw"),drawColor,label("Pen"),penSize,label("Edge"),edgeColor,edgeCustom);
+    style.append(label("Draw"),drawColor,label("Pen"),penSize,label("Node"),nodeColor,nodeCustom,label("Edge"),edgeColor,edgeCustom);
 
     const status = document.createElement("span"); status.className="status";
     toolbar.append(tools, edits, style, status);
@@ -241,8 +243,12 @@
     undo.addEventListener("click",()=>{if(state.history.length){state.future.push(snap());restore(state.history.pop());}});
     redo.addEventListener("click",()=>{if(state.future.length){state.history.push(snap());restore(state.future.pop());}});
     drawColor.addEventListener("input",()=>state.drawColor=drawColor.value);
-    drawColor.addEventListener("change",()=>{const s=selected();if(s&&s.type!=="edge"){const before=snap();s.color=drawColor.value;commit(before);}});
+    drawColor.addEventListener("change",()=>{const s=selected();if(s&&(s.type==="stroke"||s.type==="text")){const before=snap();s.color=drawColor.value;commit(before);}});
     penSize.addEventListener("change",()=>state.penSize=Number(penSize.value));
+
+    function recolorNode(c){state.nodeColor=c;nodeCustom.value=c;const s=selected();if(s?.type==="node"){const before=snap();s.color=c;commit(before);}else draw();}
+    nodeColor.addEventListener("change",()=>{if(nodeColor.value==="__custom__")nodeCustom.click();else recolorNode(nodeColor.value);});
+    nodeCustom.addEventListener("input",()=>{nodeColor.value="__custom__";recolorNode(nodeCustom.value);});
 
     function recolorEdge(c){state.edgeColor=c;edgeCustom.value=c;const s=selected();if(s?.type==="edge"){const before=snap();s.color=c;commit(before);}else draw();}
     edgeColor.addEventListener("change",()=>{if(edgeColor.value==="__custom__")edgeCustom.click();else recolorEdge(edgeColor.value);});
@@ -256,7 +262,7 @@
     canvas.addEventListener("pointerdown",e=>{
       if(e.pointerType==="mouse"&&e.button!==0)return;canvas.setPointerCapture?.(e.pointerId);const p=point(e);
       if(state.tool==="select"){state.selectedId=hit(p)?.id||null;draw();return;}
-      if(state.tool==="node"){const before=snap();state.objects.push({id:uid(),type:"node",x:p.x,y:p.y,label:nextLabel(),color:state.drawColor,size:state.nodeSize});commit(before);return;}
+      if(state.tool==="node"){const before=snap();state.objects.push({id:uid(),type:"node",x:p.x,y:p.y,label:nextLabel(),color:state.nodeColor,size:state.nodeSize});commit(before);return;}
       if(state.tool==="edge"||state.tool==="directed"){const h=hit(p);if(h?.type!=="node"){status.textContent="Choose a node.";return;}if(!state.edgeStart){state.edgeStart=h.id;state.selectedId=h.id;draw();}else if(state.edgeStart!==h.id){const before=snap();state.objects.push({id:uid(),type:"edge",from:state.edgeStart,to:h.id,directed:state.tool==="directed",color:state.edgeColor,size:state.edgeSize});state.edgeStart=null;state.selectedId=null;commit(before);}return;}
       if(state.tool==="weight"){const h=hit(p);if(h?.type==="edge"){state.selectedId=h.id;showDialog({title:"Edge Weight",labelText:"Weight",value:h.weight||"",onConfirm:v=>{const before=snap();h.weight=v.trim();commit(before);}});}return;}
       if(state.tool==="text"){showDialog({title:"Add Text",labelText:"Text",onConfirm:v=>{if(v.trim()){const before=snap();state.objects.push({id:uid(),type:"text",x:p.x,y:p.y,text:v.trim(),color:state.drawColor,size:20});commit(before);}}});return;}
@@ -272,7 +278,7 @@
       state, canvas, redraw: draw,
       setNodeSize(v){state.nodeSize=Number(v);const s=selected();if(s?.type==="node"){const before=snap();s.size=state.nodeSize;commit(before);}else draw();},
       setEdgeSize(v){state.edgeSize=Number(v);const s=selected();if(s?.type==="edge"){const before=snap();s.size=state.edgeSize;commit(before);}else draw();},
-      refreshPalette(){fillColors(edgeColor,currentPalette(),state.edgeColor);},
+      refreshPalette(){fillColors(nodeColor,currentPalette(),state.nodeColor);fillColors(edgeColor,currentPalette(),state.edgeColor);},
       exportPNG(){draw();return canvas.toDataURL("image/png");}
     };
   }
