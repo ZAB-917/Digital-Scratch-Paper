@@ -1,2811 +1,432 @@
-"use strict";
+(() => {
+  "use strict";
 
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
 
-/* =========================================================
-   GENERAL HELPERS
-   ========================================================= */
+  const STANDARD_COLORS = [
+    ["Black", "#000000"], ["Charcoal", "#374151"], ["Slate", "#334155"],
+    ["Navy", "#1e3a8a"], ["Blue", "#1d4ed8"], ["Teal", "#0f766e"],
+    ["Green", "#166534"], ["Forest", "#14532d"], ["Olive", "#3f6212"],
+    ["Brown", "#78350f"], ["Orange", "#c2410c"], ["Red", "#b91c1c"],
+    ["Crimson", "#991b1b"], ["Purple", "#6b21a8"], ["Indigo", "#4338ca"],
+    ["Magenta", "#86198f"]
+  ];
 
-function cloneObjects(objects) {
-  return JSON.parse(JSON.stringify(objects));
-}
+  // Okabe-Ito inspired choices, supplemented with black and dark blue for white backgrounds.
+  const COLORBLIND_COLORS = [
+    ["Black", "#000000"], ["Blue", "#0072B2"], ["Sky Blue", "#56B4E9"],
+    ["Bluish Green", "#009E73"], ["Orange", "#E69F00"], ["Vermillion", "#D55E00"],
+    ["Reddish Purple", "#CC79A7"], ["Dark Blue", "#003B5C"]
+  ];
 
+  const app = $("#app");
+  const dialogLayer = $("#dialogLayer");
+  const instances = {};
+  let activeQuestion = "q1";
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = filename;
-
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-
-  setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
-}
-
-
-function downloadText(text, filename, type = "text/plain") {
-  downloadBlob(
-    new Blob([text], { type }),
-    filename
-  );
-}
-
-
-function distance(a, b) {
-  return Math.hypot(
-    a.x - b.x,
-    a.y - b.y
-  );
-}
-
-
-function distanceToSegment(point, a, b) {
-
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-
-  if (dx === 0 && dy === 0) {
-    return distance(point, a);
+  function button(text, cls = "tool-button") {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.textContent = text;
+    return b;
   }
 
-  const t = Math.max(
-    0,
-    Math.min(
-      1,
-      (
-        (point.x - a.x) * dx +
-        (point.y - a.y) * dy
-      ) / (dx * dx + dy * dy)
-    )
-  );
+  function group() {
+    const g = document.createElement("div");
+    g.className = "toolbar-group";
+    return g;
+  }
 
-  const closest = {
-    x: a.x + t * dx,
-    y: a.y + t * dy
-  };
+  function label(text) {
+    const s = document.createElement("span");
+    s.className = "toolbar-label";
+    s.textContent = text;
+    return s;
+  }
 
-  return distance(point, closest);
-}
+  function fillColors(select, palette, current) {
+    select.innerHTML = "";
+    palette.forEach(([name, hex]) => {
+      const o = document.createElement("option");
+      o.value = hex;
+      o.textContent = `${name} (${hex})`;
+      select.appendChild(o);
+    });
+    const custom = document.createElement("option");
+    custom.value = "__custom__";
+    custom.textContent = "Custom color…";
+    select.appendChild(custom);
+    if ([...select.options].some(o => o.value === current)) select.value = current;
+    else select.value = "__custom__";
+  }
 
+  function currentPalette() {
+    return document.body.classList.contains("colorblind-mode") ? COLORBLIND_COLORS : STANDARD_COLORS;
+  }
 
-function getElementPoint(canvas, event) {
+  function showDialog({ title, labelText, value = "", confirmText = "Save", danger = false, onConfirm }) {
+    dialogLayer.innerHTML = "";
+    dialogLayer.hidden = false;
+    const box = document.createElement("div");
+    box.className = "dialog";
+    const h = document.createElement("h2"); h.textContent = title;
+    box.appendChild(h);
 
-  const rect = canvas.getBoundingClientRect();
-
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
-  };
-}
-
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-
-/* =========================================================
-   WHITEBOARD WORKSPACE
-   ========================================================= */
-
-function createWhiteboardWorkspace(config) {
-
-  const {
-    canvas,
-    boardWrap,
-    toolButtons,
-    colorInput,
-    sizeInput,
-    undoButton,
-    redoButton,
-    deleteButton,
-    clearButton,
-    toolHelp,
-
-    textEditor,
-    textInput,
-    textAdd,
-    textCancel,
-
-    weightEditor,
-    weightInput,
-    weightAdd,
-    weightCancel,
-
-    confirmEditor,
-    confirmMessage,
-    confirmYes,
-    confirmNo
-  } = config;
-
-
-  const ctx = canvas.getContext("2d");
-
-
-  const state = {
-    objects: [],
-    selectedId: null,
-
-    tool: "select",
-
-    color: colorInput.value,
-    size: Number(sizeInput.value),
-
-    history: [],
-    future: [],
-
-    nextNodeNumber: 1,
-
-    pendingNodePosition: null,
-    pendingTextPosition: null,
-    pendingWeightId: null,
-
-    edgeStartId: null,
-
-    draggingNodeId: null,
-    dragOffset: null,
-
-    drawing: false,
-    currentStroke: null,
-
-    dragHistorySnapshot: null,
-
-    confirmAction: null
-  };
-
-
-  const toolMessages = {
-    select: "Select and move objects.",
-    pen: "Draw freehand.",
-    eraser: "Erase freehand strokes.",
-    node: "Click to place a numbered node.",
-    edge: "Click two nodes to connect them.",
-    directed: "Click two nodes to create a directed edge.",
-    weight: "Click an edge to add or edit its weight.",
-    text: "Click to place text."
-  };
-
-
-  /* -------------------------------------------------------
-     CANVAS
-     ------------------------------------------------------- */
-
-  function resizeCanvas() {
-
-    const rect = canvas.getBoundingClientRect();
-
-    if (rect.width <= 0 || rect.height <= 0) {
-      return;
+    let input = null;
+    if (labelText) {
+      const l = document.createElement("label"); l.textContent = labelText;
+      input = document.createElement("input"); input.value = value;
+      box.append(l, input);
     }
 
-    const dpr = window.devicePixelRatio || 1;
+    const actions = document.createElement("div"); actions.className = "dialog-actions";
+    const cancel = button("Cancel", "secondary-button");
+    const ok = button(confirmText, danger ? "danger-button" : "primary-button");
+    actions.append(cancel, ok); box.appendChild(actions); dialogLayer.appendChild(box);
 
-    canvas.width = Math.max(
-      1,
-      Math.floor(rect.width * dpr)
-    );
-
-    canvas.height = Math.max(
-      1,
-      Math.floor(rect.height * dpr)
-    );
-
-    ctx.setTransform(
-      dpr,
-      0,
-      0,
-      dpr,
-      0,
-      0
-    );
-
-    draw();
+    const close = () => { dialogLayer.hidden = true; dialogLayer.innerHTML = ""; };
+    cancel.addEventListener("click", close);
+    ok.addEventListener("click", () => { onConfirm(input ? input.value : undefined); close(); });
+    (input || ok).focus();
+    if (input) input.select();
   }
 
-
-  /* -------------------------------------------------------
-     HISTORY
-     ------------------------------------------------------- */
-
-  function pushHistory() {
-
-    state.history.push(
-      cloneObjects(state.objects)
-    );
-
-    if (state.history.length > 100) {
-      state.history.shift();
-    }
-
-    state.future = [];
+  function confirmAction(title, message, action) {
+    showDialog({
+      title,
+      labelText: null,
+      confirmText: "Clear",
+      danger: true,
+      onConfirm: action
+    });
+    const h = $(".dialog h2", dialogLayer);
+    const p = document.createElement("p"); p.textContent = message; h.after(p);
   }
 
-
-  function undo() {
-
-    if (state.history.length === 0) {
-      return;
-    }
-
-    state.future.push(
-      cloneObjects(state.objects)
-    );
-
-    state.objects =
-      state.history.pop();
-
-    state.selectedId = null;
-
-    draw();
-  }
-
-
-  function redo() {
-
-    if (state.future.length === 0) {
-      return;
-    }
-
-    state.history.push(
-      cloneObjects(state.objects)
-    );
-
-    state.objects =
-      state.future.pop();
-
-    state.selectedId = null;
-
-    draw();
-  }
-
-
-  /* -------------------------------------------------------
-     OBJECT LOOKUPS
-     ------------------------------------------------------- */
-
-  function getObject(id) {
-    return state.objects.find(
-      object => object.id === id
-    );
-  }
-
-
-  function getNode(id) {
-
-    return state.objects.find(
-      object =>
-        object.id === id &&
-        object.type === "node"
-    );
-  }
-
-
-  function getNodeAt(point) {
-
-    for (let i = state.objects.length - 1; i >= 0; i--) {
-
-      const object = state.objects[i];
-
-      if (object.type !== "node") {
-        continue;
-      }
-
-      if (
-        distance(point, {
-          x: object.x,
-          y: object.y
-        }) <= 24
-      ) {
-        return object;
-      }
-    }
-
-    return null;
-  }
-
-
-  function getEdgeAt(point) {
-
-    for (let i = state.objects.length - 1; i >= 0; i--) {
-
-      const object = state.objects[i];
-
-      if (
-        object.type !== "edge" &&
-        object.type !== "directed"
-      ) {
-        continue;
-      }
-
-      const from = getNode(object.from);
-      const to = getNode(object.to);
-
-      if (!from || !to) {
-        continue;
-      }
-
-      const hit = distanceToSegment(
-        point,
-        {
-          x: from.x,
-          y: from.y
-        },
-        {
-          x: to.x,
-          y: to.y
-        }
-      );
-
-      if (hit <= 10) {
-        return object;
-      }
-    }
-
-    return null;
-  }
-
-
-  function getStrokeAt(point) {
-
-    for (let i = state.objects.length - 1; i >= 0; i--) {
-
-      const object = state.objects[i];
-
-      if (object.type !== "stroke") {
-        continue;
-      }
-
-      for (let j = 1; j < object.points.length; j++) {
-
-        const hit = distanceToSegment(
-          point,
-          object.points[j - 1],
-          object.points[j]
-        );
-
-        if (hit <= Math.max(8, object.size + 5)) {
-          return object;
-        }
-      }
-    }
-
-    return null;
-  }
-
-
-  function getTextAt(point) {
-
-    ctx.save();
-
-    ctx.font =
-      "16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-
-    for (let i = state.objects.length - 1; i >= 0; i--) {
-
-      const object = state.objects[i];
-
-      if (object.type !== "text") {
-        continue;
-      }
-
-      const width =
-        ctx.measureText(object.text).width;
-
-      if (
-        point.x >= object.x - 4 &&
-        point.x <= object.x + width + 4 &&
-        point.y >= object.y - 20 &&
-        point.y <= object.y + 6
-      ) {
-        ctx.restore();
-        return object;
-      }
-    }
-
-    ctx.restore();
-
-    return null;
-  }
-
-
-  function getObjectAt(point) {
-
-    return (
-      getNodeAt(point) ||
-      getEdgeAt(point) ||
-      getTextAt(point) ||
-      getStrokeAt(point)
-    );
-  }
-
-
-  /* -------------------------------------------------------
-     DRAWING
-     ------------------------------------------------------- */
-
-  function draw() {
-
-    const rect = canvas.getBoundingClientRect();
-
-    if (rect.width <= 0 || rect.height <= 0) {
-      return;
-    }
-
-    ctx.clearRect(
-      0,
-      0,
-      rect.width,
-      rect.height
-    );
-
-    drawEdges();
-    drawStrokes();
-    drawTexts();
-    drawNodes();
-  }
-
-
-  function drawEdges() {
-
-    for (const object of state.objects) {
-
-      if (
-        object.type !== "edge" &&
-        object.type !== "directed"
-      ) {
-        continue;
-      }
-
-      const from = getNode(object.from);
-      const to = getNode(object.to);
-
-      if (!from || !to) {
-        continue;
-      }
-
-      const dx = to.x - from.x;
-      const dy = to.y - from.y;
-
-      const length = Math.hypot(dx, dy);
-
-      if (length === 0) {
-        continue;
-      }
-
-      const ux = dx / length;
-      const uy = dy / length;
-
-      const radius = 23;
-
-      const start = {
-        x: from.x + ux * radius,
-        y: from.y + uy * radius
-      };
-
-      const end = {
-        x: to.x - ux * radius,
-        y: to.y - uy * radius
-      };
-
-      ctx.save();
-
-      ctx.strokeStyle = "#111827";
-      ctx.lineWidth = 2;
-
-      ctx.beginPath();
-
-      ctx.moveTo(start.x, start.y);
-      ctx.lineTo(end.x, end.y);
-
-      ctx.stroke();
-
-      if (object.type === "directed") {
-        drawArrowHead(end, ux, uy);
-      }
-
-      if (object.weight !== "") {
-
-        const midpoint = {
-          x: (from.x + to.x) / 2,
-          y: (from.y + to.y) / 2
-        };
-
-        drawWeight(
-          object.weight,
-          midpoint
-        );
-      }
-
-      if (state.selectedId === object.id) {
-
-        ctx.strokeStyle = "#2563eb";
-        ctx.lineWidth = 4;
-        ctx.globalAlpha = 0.25;
-
-        ctx.beginPath();
-
-        ctx.moveTo(start.x, start.y);
-        ctx.lineTo(end.x, end.y);
-
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    }
-  }
-
-
-  function drawArrowHead(point, ux, uy) {
-
-    const size = 10;
-
-    const angle = Math.atan2(uy, ux);
-
-    ctx.save();
-
-    ctx.fillStyle = "#111827";
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-      point.x,
-      point.y
-    );
-
-    ctx.lineTo(
-      point.x -
-        size * Math.cos(angle - Math.PI / 6),
-
-      point.y -
-        size * Math.sin(angle - Math.PI / 6)
-    );
-
-    ctx.lineTo(
-      point.x -
-        size * Math.cos(angle + Math.PI / 6),
-
-      point.y -
-        size * Math.sin(angle + Math.PI / 6)
-    );
-
-    ctx.closePath();
-
-    ctx.fill();
-
-    ctx.restore();
-  }
-
-
-  function drawWeight(weight, point) {
-
-    ctx.save();
-
-    ctx.font =
-      "bold 14px system-ui, sans-serif";
-
-    const textWidth =
-      ctx.measureText(weight).width;
-
-    const padding = 5;
-
-    ctx.fillStyle = "white";
-
-    ctx.fillRect(
-      point.x - textWidth / 2 - padding,
-      point.y - 11,
-      textWidth + padding * 2,
-      22
-    );
-
-    ctx.fillStyle = "#111827";
-
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillText(
-      weight,
-      point.x,
-      point.y
-    );
-
-    ctx.restore();
-  }
-
-
-  function drawStrokes() {
-
-    for (const object of state.objects) {
-
-      if (object.type !== "stroke") {
-        continue;
-      }
-
-      if (object.points.length < 2) {
-        continue;
-      }
-
-      ctx.save();
-
-      ctx.strokeStyle = object.color;
-      ctx.lineWidth = object.size;
-
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-
-      ctx.beginPath();
-
-      ctx.moveTo(
-        object.points[0].x,
-        object.points[0].y
-      );
-
-      for (let i = 1; i < object.points.length; i++) {
-
-        ctx.lineTo(
-          object.points[i].x,
-          object.points[i].y
-        );
-      }
-
-      ctx.stroke();
-
-      ctx.restore();
-    }
-  }
-
-
-  function drawTexts() {
-
-    ctx.save();
-
-    ctx.font =
-      "16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-
-    ctx.textBaseline = "alphabetic";
-
-    for (const object of state.objects) {
-
-      if (object.type !== "text") {
-        continue;
-      }
-
-      if (state.selectedId === object.id) {
-
-        const width =
-          ctx.measureText(object.text).width;
-
-        ctx.strokeStyle = "#93c5fd";
-        ctx.lineWidth = 2;
-
-        ctx.strokeRect(
-          object.x - 5,
-          object.y - 19,
-          width + 10,
-          25
-        );
-      }
-
-      ctx.fillStyle = "#111827";
-
-      ctx.fillText(
-        object.text,
-        object.x,
-        object.y
-      );
-    }
-
-    ctx.restore();
-  }
-
-
-  function drawNodes() {
-
-    for (const object of state.objects) {
-
-      if (object.type !== "node") {
-        continue;
-      }
-
-      ctx.save();
-
-      ctx.beginPath();
-
-      ctx.arc(
-        object.x,
-        object.y,
-        22,
-        0,
-        Math.PI * 2
-      );
-
-      ctx.fillStyle = "white";
-      ctx.fill();
-
-      ctx.lineWidth =
-        state.selectedId === object.id
-          ? 4
-          : 2;
-
-      ctx.strokeStyle =
-        state.selectedId === object.id
-          ? "#2563eb"
-          : "#111827";
-
-      ctx.stroke();
-
-      ctx.fillStyle = "#111827";
-
-      ctx.font =
-        "bold 15px system-ui, sans-serif";
-
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-
-      ctx.fillText(
-        object.label,
-        object.x,
-        object.y
-      );
-
-      ctx.restore();
-    }
-  }
-
-
-  /* -------------------------------------------------------
-     TOOL SELECTION
-     ------------------------------------------------------- */
-
-  function setTool(tool) {
-
-    state.tool = tool;
-
-    state.edgeStartId = null;
-
-    closeEditors();
-
-    toolButtons.forEach(button => {
-
-      button.classList.toggle(
-        "active",
-        button.dataset.tool === tool
-      );
+  function createQuestion(id, title) {
+    const shell = document.createElement("section");
+    shell.className = "question-shell";
+    shell.dataset.question = id;
+
+    const tabs = document.createElement("nav");
+    tabs.className = "inner-tabs";
+    tabs.setAttribute("aria-label", `${title} tools`);
+    const tabDefs = [
+      ["whiteboard", "Whiteboard"], ["notepad", "Notepad"], ["split", "Split View"],
+      ["blank", "Blank Split View"], ["accessibility", "Accessibility"], ["help", "How to Use"]
+    ];
+    tabDefs.forEach(([view, text], i) => {
+      const b = button(text, `inner-tab${i === 0 ? " active" : ""}`);
+      b.dataset.view = view;
+      tabs.appendChild(b);
     });
 
-    toolHelp.textContent =
-      toolMessages[tool];
+    const stage = document.createElement("div"); stage.className = "view-stage";
+    const whiteboard = document.createElement("section"); whiteboard.className = "workspace-panel visible";
+    const notepad = document.createElement("section"); notepad.className = "workspace-panel";
+    const split = document.createElement("section"); split.className = "split-stage";
+    const blank = document.createElement("section"); blank.className = "split-stage";
+    const blankBoard = document.createElement("section"); blankBoard.className = "workspace-panel";
+    const blankNotes = document.createElement("section"); blankNotes.className = "workspace-panel";
+    blank.append(blankBoard, blankNotes);
+    const accessibility = document.createElement("section"); accessibility.className = "info-panel";
+    const help = document.createElement("section"); help.className = "info-panel";
 
-    canvas.style.cursor =
-      tool === "select"
-        ? "default"
-        : "crosshair";
-  }
+    stage.append(whiteboard, notepad, split, blank, accessibility, help);
+    shell.append(tabs, stage); app.appendChild(shell);
 
+    const primaryBoard = createWhiteboard(whiteboard, `${title} whiteboard`);
+    const primaryNotes = createNotepad(notepad, `${title} notepad`);
+    const blankBoardApi = createWhiteboard(blankBoard, `${title} blank whiteboard`);
+    const blankNotesApi = createNotepad(blankNotes, `${title} blank notepad`);
+    buildAccessibility(accessibility, id);
+    buildHelp(help);
 
-  /* -------------------------------------------------------
-     EDITORS
-     ------------------------------------------------------- */
+    function setView(view) {
+      $$(".inner-tab", tabs).forEach(b => b.classList.toggle("active", b.dataset.view === view));
+      [whiteboard, notepad].forEach(p => p.classList.remove("visible"));
+      [split, blank].forEach(p => p.classList.remove("visible"));
+      [accessibility, help].forEach(p => p.classList.remove("visible"));
 
-  function positionEditor(editor, point) {
-
-    editor.hidden = false;
-
-    const editorWidth =
-      editor.offsetWidth || 220;
-
-    const editorHeight =
-      editor.offsetHeight || 50;
-
-    const rect =
-      boardWrap.getBoundingClientRect();
-
-    const left =
-      clamp(
-        point.x + 10,
-        8,
-        Math.max(
-          8,
-          rect.width - editorWidth - 8
-        )
-      );
-
-    const top =
-      clamp(
-        point.y + 10,
-        8,
-        Math.max(
-          8,
-          rect.height - editorHeight - 8
-        )
-      );
-
-    editor.style.left = `${left}px`;
-    editor.style.top = `${top}px`;
-  }
-
-
-  function closeEditors() {
-
-    textEditor.hidden = true;
-    weightEditor.hidden = true;
-    confirmEditor.hidden = true;
-
-    state.pendingNodePosition = null;
-    state.pendingTextPosition = null;
-    state.pendingWeightId = null;
-
-    state.confirmAction = null;
-  }
-
-
-  function showTextEditor(point) {
-
-    state.pendingTextPosition = point;
-
-    textInput.value = "";
-
-    positionEditor(
-      textEditor,
-      point
-    );
-
-    textInput.focus();
-  }
-
-
-  function addText() {
-
-    const text =
-      textInput.value.trim();
-
-    if (!text) {
-      closeEditors();
-      return;
+      if (view === "whiteboard") whiteboard.classList.add("visible");
+      if (view === "notepad") notepad.classList.add("visible");
+      if (view === "blank") blank.classList.add("visible");
+      if (view === "accessibility") accessibility.classList.add("visible");
+      if (view === "help") help.classList.add("visible");
+      if (view === "split") {
+        split.classList.add("visible");
+        split.append(whiteboard, notepad); // same DOM, same work, same full toolbars
+        whiteboard.classList.add("visible"); notepad.classList.add("visible");
+      } else if (!stage.contains(whiteboard) || whiteboard.parentElement === split) {
+        stage.insertBefore(whiteboard, split);
+        stage.insertBefore(notepad, split);
+      }
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     }
 
-    pushHistory();
+    $$(".inner-tab", tabs).forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
-    state.objects.push({
-      id: crypto.randomUUID(),
-      type: "text",
-      x: state.pendingTextPosition.x,
-      y: state.pendingTextPosition.y,
-      text
-    });
-
-    closeEditors();
-
-    draw();
+    return { shell, primaryBoard, primaryNotes, blankBoardApi, blankNotesApi, setView };
   }
 
-
-  function showWeightEditor(edge) {
-
-    state.pendingWeightId =
-      edge.id;
-
-    weightInput.value =
-      edge.weight || "";
-
-    const from =
-      getNode(edge.from);
-
-    const to =
-      getNode(edge.to);
-
-    const point = {
-      x: (from.x + to.x) / 2,
-      y: (from.y + to.y) / 2
+  function createWhiteboard(root, ariaLabel) {
+    root.innerHTML = "";
+    const state = {
+      objects: [], selectedId: null, tool: "select", drawColor: "#000000", edgeColor: "#1d4ed8",
+      penSize: 3, nodeSize: 46, edgeSize: 3, history: [], future: [], edgeStart: null
     };
 
-    positionEditor(
-      weightEditor,
-      point
-    );
+    const toolbar = document.createElement("div"); toolbar.className = "toolbar";
+    const tools = group();
+    const toolDefs = [["select","Select"],["pen","Pen"],["eraser","Eraser"],["node","Node"],["edge","Edge"],["directed","Directed Edge"],["weight","Weight"],["text","Text"]];
+    const toolButtons = {};
+    toolDefs.forEach(([k,t]) => { const b=button(t); b.dataset.tool=k; toolButtons[k]=b; tools.appendChild(b); });
 
-    weightInput.focus();
-  }
+    const edits = group();
+    const undo = button("Undo"), redo = button("Redo"), editLabel = button("Edit Label"), del = button("Delete"), clear = button("Clear Board", "danger-button");
+    edits.append(undo, redo, editLabel, del, clear);
 
+    const style = group();
+    const drawColor = document.createElement("input"); drawColor.type="color"; drawColor.value=state.drawColor; drawColor.setAttribute("aria-label","Drawing color");
+    const penSize = selectFrom([[1,"1px"],[2,"2px"],[3,"3px"],[5,"5px"],[8,"8px"],[12,"12px"]], 3, "Pen size");
+    const edgeColor = document.createElement("select"); edgeColor.setAttribute("aria-label","Edge color"); fillColors(edgeColor,currentPalette(),state.edgeColor);
+    const edgeCustom = document.createElement("input"); edgeCustom.type="color"; edgeCustom.value=state.edgeColor; edgeCustom.setAttribute("aria-label","Custom edge color");
+    style.append(label("Draw"),drawColor,label("Pen"),penSize,label("Edge"),edgeColor,edgeCustom);
 
-  function applyWeight() {
+    const status = document.createElement("span"); status.className="status";
+    toolbar.append(tools, edits, style, status);
 
-    const edge =
-      getObject(state.pendingWeightId);
+    const wrap = document.createElement("div"); wrap.className="canvas-wrap";
+    const canvas = document.createElement("canvas"); canvas.className="board-canvas"; canvas.setAttribute("aria-label",ariaLabel); wrap.appendChild(canvas);
+    root.append(toolbar,wrap);
+    const ctx=canvas.getContext("2d"); let drawing=null;
 
-    if (!edge) {
-      closeEditors();
-      return;
+    function selectFromLocal() {}
+    function snap(){return JSON.stringify(state.objects);}
+    function commit(before){const after=snap(); if(before!==after){state.history.push(before); if(state.history.length>100)state.history.shift(); state.future=[];} draw();}
+    function restore(s){state.objects=JSON.parse(s);state.selectedId=null;state.edgeStart=null;draw();}
+    function node(id){return state.objects.find(o=>o.type==="node"&&o.id===id);}
+    function selected(){return state.objects.find(o=>o.id===state.selectedId);}
+    function nextLabel(){const used=new Set(state.objects.filter(o=>o.type==="node").map(o=>Number(o.label)).filter(Number.isInteger));let n=1;while(used.has(n))n++;return String(n);}
+    function point(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+    function segDist(p,a,b){const dx=b.x-a.x,dy=b.y-a.y,l=dx*dx+dy*dy;if(!l)return Math.hypot(p.x-a.x,p.y-a.y);let t=((p.x-a.x)*dx+(p.y-a.y)*dy)/l;t=Math.max(0,Math.min(1,t));return Math.hypot(p.x-(a.x+t*dx),p.y-(a.y+t*dy));}
+    function hit(p){
+      for(let i=state.objects.length-1;i>=0;i--){const o=state.objects[i];if(o.type==="node"&&Math.hypot(p.x-o.x,p.y-o.y)<=(o.size||state.nodeSize)/2+6)return o;}
+      for(let i=state.objects.length-1;i>=0;i--){const o=state.objects[i];if(o.type==="edge"){const a=node(o.from),b=node(o.to);if(a&&b&&segDist(p,a,b)<=Math.max(9,(o.size||state.edgeSize)+5))return o;}}
+      for(let i=state.objects.length-1;i>=0;i--){const o=state.objects[i];if(o.type==="text"&&p.x>=o.x-5&&p.x<=o.x+Math.max(50,o.text.length*11)&&p.y>=o.y-28&&p.y<=o.y+8)return o;}
+      for(let i=state.objects.length-1;i>=0;i--){const o=state.objects[i];if(o.type==="stroke")for(let j=1;j<o.points.length;j++)if(segDist(p,o.points[j-1],o.points[j])<=8)return o;}
+      return null;
     }
 
-    pushHistory();
+    function resize(){const r=wrap.getBoundingClientRect();if(!r.width||!r.height)return;const d=Math.max(1,devicePixelRatio||1);canvas.width=Math.round(r.width*d);canvas.height=Math.round(r.height*d);canvas.style.width=r.width+"px";canvas.style.height=r.height+"px";ctx.setTransform(d,0,0,d,0,0);draw();}
+    new ResizeObserver(resize).observe(wrap);
 
-    edge.weight =
-      weightInput.value.trim();
+    function arrow(a,b,r){const ang=Math.atan2(b.y-a.y,b.x-a.x),x=b.x-Math.cos(ang)*r,y=b.y-Math.sin(ang)*r,s=13;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-s*Math.cos(ang-Math.PI/6),y-s*Math.sin(ang-Math.PI/6));ctx.lineTo(x-s*Math.cos(ang+Math.PI/6),y-s*Math.sin(ang+Math.PI/6));ctx.closePath();ctx.fill();}
 
-    closeEditors();
-
-    draw();
-  }
-
-
-  /* -------------------------------------------------------
-     CONFIRMATION
-     ------------------------------------------------------- */
-
-  function askConfirmation(message, action) {
-
-    state.confirmAction =
-      action;
-
-    confirmMessage.textContent =
-      message;
-
-    confirmEditor.hidden = false;
-
-    confirmYes.focus();
-  }
-
-
-  confirmYes.addEventListener(
-    "click",
-    () => {
-
-      const action =
-        state.confirmAction;
-
-      confirmEditor.hidden = true;
-
-      state.confirmAction = null;
-
-      if (action) {
-        action();
-      }
+    function draw(){
+      const r=wrap.getBoundingClientRect();ctx.clearRect(0,0,r.width,r.height);
+      state.objects.filter(o=>o.type==="stroke").forEach(o=>{if(o.points.length<2)return;ctx.save();ctx.strokeStyle=o.color;ctx.lineWidth=o.size;ctx.lineCap="round";ctx.lineJoin="round";ctx.beginPath();ctx.moveTo(o.points[0].x,o.points[0].y);o.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));ctx.stroke();ctx.restore();});
+      state.objects.filter(o=>o.type==="edge").forEach(o=>{const a=node(o.from),b=node(o.to);if(!a||!b)return;ctx.save();ctx.strokeStyle=o.color;ctx.fillStyle=o.color;ctx.lineWidth=o.size||state.edgeSize;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();if(o.directed)arrow(a,b,(b.size||state.nodeSize)/2);if(o.weight){ctx.font="700 18px Arial";ctx.fillText(o.weight,(a.x+b.x)/2+7,(a.y+b.y)/2-7);}ctx.restore();});
+      state.objects.filter(o=>o.type==="node").forEach(o=>{const rr=(o.size||state.nodeSize)/2;ctx.save();ctx.fillStyle=getComputedStyle(document.body).getPropertyValue("--canvas").trim();ctx.strokeStyle=o.color;ctx.lineWidth=3;ctx.beginPath();ctx.arc(o.x,o.y,rr,0,Math.PI*2);ctx.fill();ctx.stroke();ctx.fillStyle=o.color;ctx.textAlign="center";ctx.textBaseline="middle";ctx.font=`700 ${Math.max(16,Math.min(34,rr*.8))}px Arial`;ctx.fillText(o.label,o.x,o.y);ctx.restore();});
+      state.objects.filter(o=>o.type==="text").forEach(o=>{ctx.save();ctx.fillStyle=o.color;ctx.font=`600 ${o.size||20}px Arial`;ctx.fillText(o.text,o.x,o.y);ctx.restore();});
+      const s=selected();if(s){ctx.save();ctx.strokeStyle=getComputedStyle(document.body).getPropertyValue("--selection").trim();ctx.lineWidth=3;ctx.setLineDash([7,5]);if(s.type==="node"){ctx.beginPath();ctx.arc(s.x,s.y,(s.size||state.nodeSize)/2+7,0,Math.PI*2);ctx.stroke();}else if(s.type==="edge"){const a=node(s.from),b=node(s.to);if(a&&b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}ctx.restore();}
+      status.textContent=s?`Selected: ${s.type}`:`Tool: ${toolDefs.find(x=>x[0]===state.tool)?.[1]||state.tool}`;
     }
-  );
 
+    function setTool(t){state.tool=t;state.edgeStart=null;Object.entries(toolButtons).forEach(([k,b])=>b.classList.toggle("active",k===t));canvas.classList.toggle("crosshair",t!=="select");draw();}
+    Object.entries(toolButtons).forEach(([k,b])=>b.addEventListener("click",()=>setTool(k)));
+    undo.addEventListener("click",()=>{if(state.history.length){state.future.push(snap());restore(state.history.pop());}});
+    redo.addEventListener("click",()=>{if(state.future.length){state.history.push(snap());restore(state.future.pop());}});
+    drawColor.addEventListener("input",()=>state.drawColor=drawColor.value);
+    drawColor.addEventListener("change",()=>{const s=selected();if(s&&s.type!=="edge"){const before=snap();s.color=drawColor.value;commit(before);}});
+    penSize.addEventListener("change",()=>state.penSize=Number(penSize.value));
 
-  confirmNo.addEventListener(
-    "click",
-    () => {
+    function recolorEdge(c){state.edgeColor=c;edgeCustom.value=c;const s=selected();if(s?.type==="edge"){const before=snap();s.color=c;commit(before);}else draw();}
+    edgeColor.addEventListener("change",()=>{if(edgeColor.value==="__custom__")edgeCustom.click();else recolorEdge(edgeColor.value);});
+    edgeCustom.addEventListener("input",()=>{edgeColor.value="__custom__";recolorEdge(edgeCustom.value);});
 
-      confirmEditor.hidden = true;
+    editLabel.addEventListener("click",()=>{const s=selected();if(s?.type!=="node"){status.textContent="Select a node first.";return;}showDialog({title:"Edit Node Label",labelText:"Node label",value:s.label,onConfirm:v=>{if(v.trim()){const before=snap();s.label=v.trim();commit(before);}}});});
+    del.addEventListener("click",()=>{const s=selected();if(!s)return;const before=snap();if(s.type==="node")state.objects=state.objects.filter(o=>o.id!==s.id&&!(o.type==="edge"&&(o.from===s.id||o.to===s.id)));else state.objects=state.objects.filter(o=>o.id!==s.id);state.selectedId=null;commit(before);});
+    clear.addEventListener("click",()=>{if(!state.objects.length)return;confirmAction("Clear whiteboard?","Everything on this whiteboard will be removed.",()=>{const before=snap();state.objects=[];state.selectedId=null;commit(before);});});
 
-      state.confirmAction = null;
-    }
-  );
+    canvas.addEventListener("dblclick",e=>{if(state.tool!=="select")return;const h=hit(point(e));if(h?.type==="node"){state.selectedId=h.id;editLabel.click();}});
+    canvas.addEventListener("pointerdown",e=>{
+      if(e.pointerType==="mouse"&&e.button!==0)return;canvas.setPointerCapture?.(e.pointerId);const p=point(e);
+      if(state.tool==="select"){state.selectedId=hit(p)?.id||null;draw();return;}
+      if(state.tool==="node"){const before=snap();state.objects.push({id:uid(),type:"node",x:p.x,y:p.y,label:nextLabel(),color:state.drawColor,size:state.nodeSize});commit(before);return;}
+      if(state.tool==="edge"||state.tool==="directed"){const h=hit(p);if(h?.type!=="node"){status.textContent="Choose a node.";return;}if(!state.edgeStart){state.edgeStart=h.id;state.selectedId=h.id;draw();}else if(state.edgeStart!==h.id){const before=snap();state.objects.push({id:uid(),type:"edge",from:state.edgeStart,to:h.id,directed:state.tool==="directed",color:state.edgeColor,size:state.edgeSize});state.edgeStart=null;state.selectedId=null;commit(before);}return;}
+      if(state.tool==="weight"){const h=hit(p);if(h?.type==="edge"){state.selectedId=h.id;showDialog({title:"Edge Weight",labelText:"Weight",value:h.weight||"",onConfirm:v=>{const before=snap();h.weight=v.trim();commit(before);}});}return;}
+      if(state.tool==="text"){showDialog({title:"Add Text",labelText:"Text",onConfirm:v=>{if(v.trim()){const before=snap();state.objects.push({id:uid(),type:"text",x:p.x,y:p.y,text:v.trim(),color:state.drawColor,size:20});commit(before);}}});return;}
+      if(state.tool==="pen"||state.tool==="eraser"){drawing={before:snap(),erase:state.tool==="eraser",points:[p]};if(!drawing.erase)state.objects.push({id:uid(),type:"stroke",points:drawing.points,color:state.drawColor,size:state.penSize});}
+    });
+    canvas.addEventListener("pointermove",e=>{if(!drawing)return;const p=point(e);if(drawing.erase){const h=hit(p);if(h){state.objects=state.objects.filter(o=>o.id!==h.id);if(h.type==="node")state.objects=state.objects.filter(o=>!(o.type==="edge"&&(o.from===h.id||o.to===h.id)));}}else{const s=state.objects.at(-1);if(s?.type==="stroke")s.points.push(p);}draw();});
+    canvas.addEventListener("pointerup",()=>{if(!drawing)return;const before=drawing.before;drawing=null;commit(before);});
+    canvas.addEventListener("pointercancel",()=>drawing=null);
 
+    setTool("select");
 
-  /* -------------------------------------------------------
-     NODES
-     ------------------------------------------------------- */
-
-  function addNode(point) {
-
-    pushHistory();
-
-    const label =
-      String(state.nextNodeNumber);
-
-    state.nextNodeNumber++;
-
-    const node = {
-      id: crypto.randomUUID(),
-      type: "node",
-      x: point.x,
-      y: point.y,
-      label
+    return {
+      state, canvas, redraw: draw,
+      setNodeSize(v){state.nodeSize=Number(v);const s=selected();if(s?.type==="node"){const before=snap();s.size=state.nodeSize;commit(before);}else draw();},
+      setEdgeSize(v){state.edgeSize=Number(v);const s=selected();if(s?.type==="edge"){const before=snap();s.size=state.edgeSize;commit(before);}else draw();},
+      refreshPalette(){fillColors(edgeColor,currentPalette(),state.edgeColor);},
+      exportPNG(){draw();return canvas.toDataURL("image/png");}
     };
-
-    state.objects.push(node);
-
-    state.selectedId =
-      node.id;
-
-    draw();
   }
 
+  function selectFrom(items, selected, aria) {
+    const s=document.createElement("select");s.setAttribute("aria-label",aria);items.forEach(([v,t])=>{const o=document.createElement("option");o.value=v;o.textContent=t;if(String(v)===String(selected))o.selected=true;s.appendChild(o);});return s;
+  }
 
-  function createEdge(firstNode, secondNode, directed) {
+  function createNotepad(root, ariaLabel) {
+    root.innerHTML="";let savedRange=null;
+    const toolbar=document.createElement("div");toolbar.className="toolbar";
+    const g1=group(), insert=button("Insert Table"), clear=button("Clear Notes","danger-button");g1.append(insert,clear);
+    const g2=group(), color= document.createElement("select"), custom=document.createElement("input");color.setAttribute("aria-label","Note color");fillColors(color,currentPalette(),"#000000");custom.type="color";custom.value="#000000";custom.setAttribute("aria-label","Custom note color");g2.append(label("Note color"),color,custom);
+    const g3=group(), rows=numberInput(3,1,30,"Table rows"), cols=numberInput(3,1,15,"Table columns");g3.append(label("Rows"),rows,label("Columns"),cols);
+    const status=document.createElement("span");status.className="status";status.textContent="Temporary notes";toolbar.append(g1,g2,g3,status);
+    const editor=document.createElement("div");editor.className="notes-editor";editor.contentEditable="true";editor.setAttribute("role","textbox");editor.setAttribute("aria-multiline","true");editor.setAttribute("aria-label",ariaLabel);root.append(toolbar,editor);
 
-    if (
-      !firstNode ||
-      !secondNode ||
-      firstNode.id === secondNode.id
-    ) {
-      return;
-    }
+    function inside(){const s=getSelection();return !!(s&&s.rangeCount&&editor.contains(s.anchorNode)&&editor.contains(s.focusNode));}
+    function save(){if(inside())savedRange=getSelection().getRangeAt(0).cloneRange();}
+    document.addEventListener("selectionchange",save);editor.addEventListener("keyup",save);editor.addEventListener("mouseup",save);editor.addEventListener("touchend",save);editor.addEventListener("input",save);editor.addEventListener("focus",save);
+    function restore(){editor.focus();const sel=getSelection();sel.removeAllRanges();if(savedRange){try{sel.addRange(savedRange);return savedRange;}catch{savedRange=null;}}const r=document.createRange();r.selectNodeContents(editor);r.collapse(false);sel.addRange(r);return r;}
+    function tableAncestor(n){let x=n?.nodeType===3?n.parentElement:n;while(x&&x!==editor){if(x.tagName==="TABLE")return x;x=x.parentElement;}return null;}
+    function insertTable(){const r=restore(),table=document.createElement("table"),body=document.createElement("tbody"),rc=Math.max(1,Math.min(30,+rows.value||3)),cc=Math.max(1,Math.min(15,+cols.value||3));for(let i=0;i<rc;i++){const tr=document.createElement("tr");for(let j=0;j<cc;j++){const td=document.createElement("td");td.contentEditable="true";td.innerHTML="<br>";tr.appendChild(td);}body.appendChild(tr);}table.appendChild(body);const current=tableAncestor(r.commonAncestorContainer),spacer=document.createElement("div");spacer.innerHTML="<br>";if(current){current.after(table);table.after(spacer);}else{r.deleteContents();r.insertNode(table);table.after(spacer);}const first=$("td",table);first.focus();const nr=document.createRange();nr.selectNodeContents(first);nr.collapse(true);const sel=getSelection();sel.removeAllRanges();sel.addRange(nr);savedRange=nr.cloneRange();}
+    insert.addEventListener("pointerdown",e=>{e.preventDefault();save();insertTable();});
+    clear.addEventListener("click",()=>{if(!editor.innerHTML.trim())return;confirmAction("Clear notes?","All notes and tables in this notepad will be removed.",()=>{editor.innerHTML="";savedRange=null;});});
+    function applyColor(c){restore();document.execCommand("foreColor",false,c);save();editor.focus();}
+    color.addEventListener("pointerdown",save);custom.addEventListener("pointerdown",save);color.addEventListener("change",()=>{if(color.value==="__custom__")custom.click();else applyColor(color.value);});custom.addEventListener("input",()=>{color.value="__custom__";applyColor(custom.value);});
+    editor.addEventListener("keydown",e=>{if(e.key!=="Tab")return;const cell=e.target.closest?.("td");if(!cell||!editor.contains(cell))return;e.preventDefault();const table=cell.closest("table"),cells=$$("td",table),i=cells.indexOf(cell);if(e.shiftKey){if(i>0)cells[i-1].focus();return;}if(i<cells.length-1){cells[i+1].focus();return;}const count=cell.parentElement.children.length,tr=document.createElement("tr");for(let j=0;j<count;j++){const td=document.createElement("td");td.contentEditable="true";td.innerHTML="<br>";tr.appendChild(td);}table.tBodies[0].appendChild(tr);tr.firstElementChild.focus();});
+    return { editor, getHTML:()=>editor.innerHTML, refreshPalette(){const old=color.value;fillColors(color,currentPalette(),old);} };
+  }
 
-    pushHistory();
+  function numberInput(value,min,max,aria){const i=document.createElement("input");i.type="number";i.value=value;i.min=min;i.max=max;i.style.width="76px";i.setAttribute("aria-label",aria);return i;}
 
-    state.objects.push({
-      id: crypto.randomUUID(),
-      type: directed
-        ? "directed"
-        : "edge",
+  function buildAccessibility(root, questionId) {
+    root.innerHTML=`
+      <h2>Accessibility</h2>
+      <p>These settings are shared across both question scratchpads so students do not have to configure the interface twice.</p>
+      <div class="accessibility-grid">
+        <div class="accessibility-card">
+          <h3>Text &amp; reading</h3>
+          <label>Interface and note text size
+            <select data-setting="text-scale">
+              <option value="0.9">90%</option><option value="1" selected>100%</option><option value="1.15">115%</option>
+              <option value="1.3">130%</option><option value="1.5">150%</option><option value="1.75">175%</option><option value="2">200%</option>
+            </select>
+          </label>
+          <label>Font
+            <select data-setting="font">
+              <option value="standard">Standard</option><option value="readable">High readability</option><option value="dyslexic">Dyslexia-friendly</option>
+            </select>
+          </label>
+          <label><input type="checkbox" data-setting="spacing"> Extra line, letter, and word spacing</label>
+        </div>
+        <div class="accessibility-card">
+          <h3>Graph visibility</h3>
+          <label>Node size
+            <select data-setting="node-size"><option value="34">Small</option><option value="46" selected>Standard</option><option value="60">Large</option><option value="76">Extra large</option><option value="96">Huge</option></select>
+          </label>
+          <label>Edge thickness
+            <select data-setting="edge-size"><option value="2">Thin</option><option value="3" selected>Standard</option><option value="5">Thick</option><option value="8">Extra thick</option><option value="12">Maximum</option></select>
+          </label>
+          <p>When a node or edge is selected, changing its size also changes that selected object. Otherwise the setting applies to new objects.</p>
+        </div>
+        <div class="accessibility-card">
+          <h3>Display</h3>
+          <label>Theme
+            <select data-setting="theme"><option value="light">Light</option><option value="dark">Dark</option><option value="contrast">High contrast</option></select>
+          </label>
+          <label>Color palette
+            <select data-setting="palette"><option value="standard">Standard high-contrast colors</option><option value="colorblind">Colorblind-friendly palette</option></select>
+          </label>
+          <p>The colorblind-friendly palette avoids relying on red versus green. Graph meaning should still come from labels, weights, and arrowheads rather than color alone.</p>
+        </div>
+        <div class="accessibility-card">
+          <h3>Interaction</h3>
+          <label><input type="checkbox" data-setting="focus"> Focus mode: hide nonessential status text</label>
+          <p>Controls have large touch targets, visible keyboard focus outlines, touchscreen/stylus support, and reduced-motion support when the operating system requests it.</p>
+          <p>Browser zoom remains available and is not disabled by the site.</p>
+        </div>
+      </div>
+      <p class="notice"><strong>Privacy:</strong> accessibility choices are intentionally not saved. Reloading the page returns the site to its defaults, just like the scratch work.</p>`;
 
-      from: firstNode.id,
-      to: secondNode.id,
+    const controls = $$('[data-setting]', root);
+    controls.forEach(c => c.addEventListener("change", () => applyAccessibility(c.dataset.setting, c.type === "checkbox" ? c.checked : c.value)));
+  }
 
-      weight: ""
+  function applyAccessibility(setting, value) {
+    if(setting==="text-scale") document.documentElement.style.setProperty("--ui-scale", value);
+    if(setting==="font"){document.body.classList.remove("font-readable","font-dyslexic");if(value==="readable")document.body.classList.add("font-readable");if(value==="dyslexic")document.body.classList.add("font-dyslexic");}
+    if(setting==="spacing") document.body.classList.toggle("extra-spacing", value);
+    if(setting==="theme"){document.body.classList.remove("dark-mode","high-contrast");if(value==="dark")document.body.classList.add("dark-mode");if(value==="contrast")document.body.classList.add("high-contrast");Object.values(instances).forEach(x=>{x.primaryBoard.redraw();x.blankBoardApi.redraw();});}
+    if(setting==="palette"){document.body.classList.toggle("colorblind-mode",value==="colorblind");Object.values(instances).forEach(x=>{x.primaryBoard.refreshPalette();x.blankBoardApi.refreshPalette();x.primaryNotes.refreshPalette();x.blankNotesApi.refreshPalette();});}
+    if(setting==="focus") document.body.classList.toggle("focus-mode", value);
+    if(setting==="node-size") Object.values(instances).forEach(x=>{x.primaryBoard.setNodeSize(value);x.blankBoardApi.setNodeSize(value);});
+    if(setting==="edge-size") Object.values(instances).forEach(x=>{x.primaryBoard.setEdgeSize(value);x.blankBoardApi.setEdgeSize(value);});
+    syncAccessibilityControls(setting, value);
+    window.dispatchEvent(new Event("resize"));
+  }
+
+  function syncAccessibilityControls(setting, value){$$(`[data-setting="${setting}"]`).forEach(c=>{if(c.type==="checkbox")c.checked=!!value;else c.value=String(value);});}
+
+  function buildHelp(root) {
+    root.innerHTML=`
+      <h2>How to Use</h2>
+      <p>Each exam question has its own completely independent scratchpad. Use the large <strong>Question 1</strong> and <strong>Question 2</strong> tabs at the top to switch between them.</p>
+      <h3>Whiteboard</h3>
+      <ul>
+        <li><strong>Select:</strong> select a node, edge, stroke, or text object before editing or deleting it.</li>
+        <li><strong>Pen / Eraser:</strong> draw or erase with a mouse, touchscreen, or stylus.</li>
+        <li><strong>Node:</strong> click or tap to add nodes. Nodes automatically receive the smallest unused positive number.</li>
+        <li><strong>Edit Label:</strong> select a node and choose Edit Label. Double-clicking a selected-mode node also opens the label editor.</li>
+        <li><strong>Edge / Directed Edge:</strong> choose the tool, then select the first and second nodes. Directed edges receive an arrowhead.</li>
+        <li><strong>Weight:</strong> choose Weight and select an edge.</li>
+        <li><strong>Text:</strong> choose Text, then click or tap where the text should appear.</li>
+        <li><strong>Colors:</strong> drawing color affects strokes, nodes, and text. Edge Color controls edges. Selecting an existing object before changing its color recolors it.</li>
+      </ul>
+      <h3>Notepad</h3>
+      <ul>
+        <li>Type directly into the notepad. Select text before choosing Note Color to recolor it.</li>
+        <li>Set the desired row and column count, place the cursor where the table should go, then choose <strong>Insert Table</strong>.</li>
+        <li>Tab moves through table cells. Pressing Tab from the final cell adds another row. Shift+Tab moves backward.</li>
+      </ul>
+      <h3>Split views</h3>
+      <ul>
+        <li><strong>Split View</strong> shows the same whiteboard and notepad for the current question side by side. All controls remain available.</li>
+        <li><strong>Blank Split View</strong> is a second blank whiteboard/notepad pair inside that question. It stays independent from the main work during the current session.</li>
+      </ul>
+      <h3>Accessibility</h3>
+      <p>The Accessibility tab includes text size, node size, edge thickness, dark mode, high contrast, a colorblind-friendly palette, a dyslexia-friendly font, extra text spacing, and focus mode. Accessibility settings apply to both question tabs.</p>
+      <h3>Download</h3>
+      <p><strong>Download Work</strong> downloads the main whiteboard and notepad for both Question 1 and Question 2. Blank Split View is intentionally not included.</p>
+      <p class="notice"><strong>Nothing is saved automatically.</strong> Closing or refreshing the browser clears the work. The site does not use localStorage, sessionStorage, IndexedDB, cookies, analytics, a backend, or collaboration features.</p>`;
+  }
+
+  function downloadBlob(name, blob){const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+  function dataURLBlob(url){const [meta,data]=url.split(","),mime=meta.match(/:(.*?);/)[1],raw=atob(data),arr=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);return new Blob([arr],{type:mime});}
+  function downloadText(name,text,type="text/html"){downloadBlob(name,new Blob([text],{type}));}
+
+  instances.q1=createQuestion("q1","Question 1");
+  instances.q2=createQuestion("q2","Question 2");
+  instances.q1.shell.classList.add("active");
+
+  $$(".question-tab").forEach(tab=>tab.addEventListener("click",()=>{
+    activeQuestion=tab.dataset.question;
+    $$(".question-tab").forEach(t=>{const on=t===tab;t.classList.toggle("active",on);t.setAttribute("aria-selected",String(on));});
+    Object.entries(instances).forEach(([id,x])=>x.shell.classList.toggle("active",id===activeQuestion));
+    requestAnimationFrame(()=>window.dispatchEvent(new Event("resize")));
+  }));
+
+  $("#downloadAll").addEventListener("click",()=>{
+    [["q1","question-1"],["q2","question-2"]].forEach(([id,prefix])=>{
+      const x=instances[id];
+      downloadBlob(`${prefix}-whiteboard.png`,dataURLBlob(x.primaryBoard.exportPNG()));
+      downloadText(`${prefix}-notes.html`,`<!doctype html><html><head><meta charset="utf-8"><title>${prefix} notes</title></head><body>${x.primaryNotes.getHTML()}</body></html>`);
     });
-
-    state.selectedId = null;
-
-    draw();
-  }
-
-
-  /* -------------------------------------------------------
-     POINTER EVENTS
-     ------------------------------------------------------- */
-
-  function pointerDown(event) {
-
-    event.preventDefault();
-
-    const point =
-      getElementPoint(
-        canvas,
-        event
-      );
-
-    if (state.tool === "node") {
-
-      addNode(point);
-
-      return;
-    }
-
-
-    if (
-      state.tool === "edge" ||
-      state.tool === "directed"
-    ) {
-
-      const node =
-        getNodeAt(point);
-
-      if (!node) {
-        return;
-      }
-
-      if (!state.edgeStartId) {
-
-        state.edgeStartId =
-          node.id;
-
-        state.selectedId =
-          node.id;
-
-        draw();
-
-        toolHelp.textContent =
-          "Now click another node.";
-
-        return;
-      }
-
-      const firstNode =
-        getNode(state.edgeStartId);
-
-      createEdge(
-        firstNode,
-        node,
-        state.tool === "directed"
-      );
-
-      state.edgeStartId = null;
-
-      toolHelp.textContent =
-        toolMessages[state.tool];
-
-      return;
-    }
-
-
-    if (state.tool === "weight") {
-
-      const edge =
-        getEdgeAt(point);
-
-      if (edge) {
-        showWeightEditor(edge);
-      }
-
-      return;
-    }
-
-
-    if (state.tool === "text") {
-
-      showTextEditor(point);
-
-      return;
-    }
-
-
-    if (state.tool === "pen") {
-
-      state.drawing = true;
-
-      state.currentStroke = {
-        id: crypto.randomUUID(),
-        type: "stroke",
-        color: state.color,
-        size: state.size,
-        points: [point]
-      };
-
-      pushHistory();
-
-      state.objects.push(
-        state.currentStroke
-      );
-
-      canvas.setPointerCapture(
-        event.pointerId
-      );
-
-      draw();
-
-      return;
-    }
-
-
-    if (state.tool === "eraser") {
-
-      const object =
-        getStrokeAt(point);
-
-      if (object) {
-
-        pushHistory();
-
-        state.objects =
-          state.objects.filter(
-            item => item.id !== object.id
-          );
-
-        draw();
-      }
-
-      return;
-    }
-
-
-    if (state.tool === "select") {
-
-      const object =
-        getObjectAt(point);
-
-      if (!object) {
-
-        state.selectedId = null;
-
-        draw();
-
-        return;
-      }
-
-      state.selectedId =
-        object.id;
-
-      if (object.type === "node") {
-
-        state.draggingNodeId =
-          object.id;
-
-        state.dragOffset = {
-          x: point.x - object.x,
-          y: point.y - object.y
-        };
-
-        state.dragHistorySnapshot =
-          cloneObjects(
-            state.objects
-          );
-
-        canvas.setPointerCapture(
-          event.pointerId
-        );
-      }
-
-      draw();
-    }
-  }
-
-
-  function pointerMove(event) {
-
-    const point =
-      getElementPoint(
-        canvas,
-        event
-      );
-
-
-    if (
-      state.tool === "pen" &&
-      state.drawing &&
-      state.currentStroke
-    ) {
-
-      state.currentStroke.points.push(
-        point
-      );
-
-      draw();
-
-      return;
-    }
-
-
-    if (
-      state.tool === "select" &&
-      state.draggingNodeId
-    ) {
-
-      const node =
-        getNode(
-          state.draggingNodeId
-        );
-
-      if (!node) {
-        return;
-      }
-
-      node.x =
-        point.x -
-        state.dragOffset.x;
-
-      node.y =
-        point.y -
-        state.dragOffset.y;
-
-      draw();
-    }
-  }
-
-
-  function pointerUp(event) {
-
-    if (
-      state.tool === "pen" &&
-      state.drawing
-    ) {
-
-      state.drawing = false;
-      state.currentStroke = null;
-
-      try {
-        canvas.releasePointerCapture(
-          event.pointerId
-        );
-      } catch {
-        // Pointer capture may already be released.
-      }
-
-      draw();
-
-      return;
-    }
-
-
-    if (
-      state.tool === "select" &&
-      state.draggingNodeId
-    ) {
-
-      const before =
-        state.dragHistorySnapshot;
-
-      const after =
-        cloneObjects(
-          state.objects
-        );
-
-      if (
-        JSON.stringify(before) !==
-        JSON.stringify(after)
-      ) {
-
-        state.history.push(before);
-
-        if (state.history.length > 100) {
-          state.history.shift();
-        }
-
-        state.future = [];
-      }
-
-      state.draggingNodeId = null;
-      state.dragOffset = null;
-      state.dragHistorySnapshot = null;
-
-      try {
-        canvas.releasePointerCapture(
-          event.pointerId
-        );
-      } catch {
-        // Pointer capture may already be released.
-      }
-
-      draw();
-    }
-  }
-
-
-  canvas.addEventListener(
-    "pointerdown",
-    pointerDown
-  );
-
-  canvas.addEventListener(
-    "pointermove",
-    pointerMove
-  );
-
-  canvas.addEventListener(
-    "pointerup",
-    pointerUp
-  );
-
-  canvas.addEventListener(
-    "pointercancel",
-    pointerUp
-  );
-
-
-  /* -------------------------------------------------------
-     BUTTONS
-     ------------------------------------------------------- */
-
-  toolButtons.forEach(button => {
-
-    button.addEventListener(
-      "click",
-      () => {
-        setTool(button.dataset.tool);
-      }
-    );
   });
-
-
-  colorInput.addEventListener(
-    "input",
-    () => {
-      state.color =
-        colorInput.value;
-    }
-  );
-
-
-  sizeInput.addEventListener(
-    "input",
-    () => {
-      state.size =
-        Number(sizeInput.value);
-    }
-  );
-
-
-  undoButton.addEventListener(
-    "click",
-    undo
-  );
-
-
-  redoButton.addEventListener(
-    "click",
-    redo
-  );
-
-
-  deleteButton.addEventListener(
-    "click",
-    () => {
-
-      if (!state.selectedId) {
-        return;
-      }
-
-      pushHistory();
-
-      state.objects =
-        state.objects.filter(
-          object =>
-            object.id !==
-            state.selectedId
-        );
-
-      state.selectedId = null;
-
-      draw();
-    }
-  );
-
-
-  clearButton.addEventListener(
-    "click",
-    () => {
-
-      if (state.objects.length === 0) {
-        return;
-      }
-
-      askConfirmation(
-        "Clear the entire whiteboard?",
-        () => {
-
-          pushHistory();
-
-          state.objects = [];
-          state.selectedId = null;
-          state.edgeStartId = null;
-
-          draw();
-        }
-      );
-    }
-  );
-
-
-  textAdd.addEventListener(
-    "click",
-    addText
-  );
-
-
-  textCancel.addEventListener(
-    "click",
-    closeEditors
-  );
-
-
-  weightAdd.addEventListener(
-    "click",
-    applyWeight
-  );
-
-
-  weightCancel.addEventListener(
-    "click",
-    closeEditors
-  );
-
-
-  textInput.addEventListener(
-    "keydown",
-    event => {
-
-      if (event.key === "Enter") {
-        event.preventDefault();
-        addText();
-      }
-
-      if (event.key === "Escape") {
-        closeEditors();
-      }
-    }
-  );
-
-
-  weightInput.addEventListener(
-    "keydown",
-    event => {
-
-      if (event.key === "Enter") {
-        event.preventDefault();
-        applyWeight();
-      }
-
-      if (event.key === "Escape") {
-        closeEditors();
-      }
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     PUBLIC API
-     ------------------------------------------------------- */
-
-  function clear() {
-
-    if (state.objects.length === 0) {
-      return;
-    }
-
-    pushHistory();
-
-    state.objects = [];
-    state.selectedId = null;
-    state.edgeStartId = null;
-
-    draw();
-  }
-
-
-  function getObjects() {
-    return cloneObjects(
-      state.objects
-    );
-  }
-
-
-  function downloadPNG(filename) {
-
-    canvas.toBlob(
-      blob => {
-
-        if (!blob) {
-          return;
-        }
-
-        downloadBlob(
-          blob,
-          filename
-        );
-      },
-      "image/png"
-    );
-  }
-
-
-  resizeCanvas();
-
-  setTool("select");
-
-
-  return {
-    resize: resizeCanvas,
-    clear,
-    getObjects,
-    downloadPNG
-  };
-}
-
-
-/* =========================================================
-   NOTEPAD WORKSPACE
-   ========================================================= */
-
-function createNotepadWorkspace(config) {
-
-  const {
-    notes,
-    insertTableButton,
-    clearNotesButton,
-
-    tableEditor,
-    tableRows,
-    tableColumns,
-    tableInsert,
-    tableCancel
-  } = config;
-
-
-  let savedRange = null;
-
-
-  /* -------------------------------------------------------
-     SELECTION PRESERVATION
-     ------------------------------------------------------- */
-
-  function saveSelection() {
-
-    const selection =
-      window.getSelection();
-
-    if (
-      !selection ||
-      selection.rangeCount === 0
-    ) {
-      return;
-    }
-
-    const range =
-      selection.getRangeAt(0);
-
-    if (
-      notes.contains(
-        range.commonAncestorContainer
-      )
-    ) {
-
-      savedRange =
-        range.cloneRange();
-    }
-  }
-
-
-  function restoreSelection() {
-
-    if (!savedRange) {
-      return false;
-    }
-
-    if (
-      !notes.contains(
-        savedRange.commonAncestorContainer
-      )
-    ) {
-      savedRange = null;
-      return false;
-    }
-
-    const selection =
-      window.getSelection();
-
-    selection.removeAllRanges();
-
-    selection.addRange(
-      savedRange.cloneRange()
-    );
-
-    return true;
-  }
-
-
-  function placeCaretAtEnd() {
-
-    notes.focus();
-
-    const range =
-      document.createRange();
-
-    range.selectNodeContents(
-      notes
-    );
-
-    range.collapse(false);
-
-    const selection =
-      window.getSelection();
-
-    selection.removeAllRanges();
-
-    selection.addRange(range);
-  }
-
-
-  document.addEventListener(
-    "selectionchange",
-    () => {
-
-      const selection =
-        window.getSelection();
-
-      if (
-        !selection ||
-        selection.rangeCount === 0
-      ) {
-        return;
-      }
-
-      const range =
-        selection.getRangeAt(0);
-
-      if (
-        notes.contains(
-          range.commonAncestorContainer
-        )
-      ) {
-        savedRange =
-          range.cloneRange();
-      }
-    }
-  );
-
-
-  ["mouseup", "keyup", "focus"].forEach(
-    eventName => {
-
-      notes.addEventListener(
-        eventName,
-        saveSelection
-      );
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     TABLE CREATION
-     ------------------------------------------------------- */
-
-  function createTable(rows, columns) {
-
-    const table =
-      document.createElement("table");
-
-    const tbody =
-      document.createElement("tbody");
-
-    for (let r = 0; r < rows; r++) {
-
-      const tr =
-        document.createElement("tr");
-
-      for (let c = 0; c < columns; c++) {
-
-        const td =
-          document.createElement("td");
-
-        td.contentEditable = "true";
-        td.tabIndex = 0;
-
-        tr.appendChild(td);
-      }
-
-      tbody.appendChild(tr);
-    }
-
-    table.appendChild(tbody);
-
-    return table;
-  }
-
-
-  function insertTableAtCursor() {
-
-    const rows =
-      clamp(
-        Number(tableRows.value) || 1,
-        1,
-        30
-      );
-
-    const columns =
-      clamp(
-        Number(tableColumns.value) || 1,
-        1,
-        20
-      );
-
-
-    const table =
-      createTable(
-        rows,
-        columns
-      );
-
-
-    notes.focus();
-
-
-    /*
-      Critical part:
-
-      Restore the exact selection that existed BEFORE
-      the Insert Table button was clicked.
-
-      This prevents the table from jumping to the
-      beginning/end of the notes.
-    */
-
-    const restored =
-      restoreSelection();
-
-
-    let range = null;
-
-    if (
-      restored &&
-      window.getSelection().rangeCount
-    ) {
-
-      range =
-        window.getSelection()
-          .getRangeAt(0);
-    }
-
-
-    /*
-      If there is no saved cursor position yet,
-      put the table at the end.
-    */
-
-    if (
-      !range ||
-      !notes.contains(
-        range.commonAncestorContainer
-      )
-    ) {
-
-      placeCaretAtEnd();
-
-      range =
-        window.getSelection()
-          .getRangeAt(0);
-    }
-
-
-    /*
-      Prevent accidentally putting a table inside
-      another table cell.
-    */
-
-    let container =
-      range.startContainer;
-
-    if (
-      container.nodeType !== Node.ELEMENT_NODE
-    ) {
-      container =
-        container.parentElement;
-    }
-
-    const containingCell =
-      container?.closest("td");
-
-
-    if (containingCell) {
-
-      const containingTable =
-        containingCell.closest("table");
-
-      const spacer =
-        document.createElement("p");
-
-      spacer.innerHTML = "<br>";
-
-      containingTable.after(
-        spacer
-      );
-
-      spacer.after(table);
-
-    } else {
-
-      range.deleteContents();
-
-      range.insertNode(table);
-    }
-
-
-    /*
-      Put a blank paragraph after the table so the
-      student can immediately continue typing below it.
-    */
-
-    if (!table.nextSibling) {
-
-      const spacer =
-        document.createElement("p");
-
-      spacer.innerHTML = "<br>";
-
-      table.after(spacer);
-    }
-
-
-    /*
-      Put the cursor in the first cell.
-    */
-
-    const firstCell =
-      table.querySelector("td");
-
-    if (firstCell) {
-
-      firstCell.focus();
-
-      const cellRange =
-        document.createRange();
-
-      cellRange.selectNodeContents(
-        firstCell
-      );
-
-      cellRange.collapse(true);
-
-      const selection =
-        window.getSelection();
-
-      selection.removeAllRanges();
-
-      selection.addRange(
-        cellRange
-      );
-
-      savedRange =
-        cellRange.cloneRange();
-    }
-
-
-    tableEditor.hidden = true;
-  }
-
-
-  /* -------------------------------------------------------
-     TABLE BUTTON
-     ------------------------------------------------------- */
-
-  insertTableButton.addEventListener(
-    "click",
-    () => {
-
-      /*
-        Save the cursor BEFORE the table controls
-        take focus.
-      */
-
-      saveSelection();
-
-      tableEditor.hidden = false;
-
-      tableRows.focus();
-      tableRows.select();
-    }
-  );
-
-
-  tableInsert.addEventListener(
-    "click",
-    insertTableAtCursor
-  );
-
-
-  tableCancel.addEventListener(
-    "click",
-    () => {
-
-      tableEditor.hidden = true;
-
-      notes.focus();
-
-      restoreSelection();
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     TABLE TAB NAVIGATION
-     ------------------------------------------------------- */
-
-  notes.addEventListener(
-    "keydown",
-    event => {
-
-      if (event.key !== "Tab") {
-        return;
-      }
-
-      const cell =
-        event.target.closest?.("td");
-
-      if (
-        !cell ||
-        !notes.contains(cell)
-      ) {
-        return;
-      }
-
-      const table =
-        cell.closest("table");
-
-      if (!table) {
-        return;
-      }
-
-      const cells =
-        Array.from(
-          table.querySelectorAll("td")
-        );
-
-      const index =
-        cells.indexOf(cell);
-
-      event.preventDefault();
-
-
-      if (event.shiftKey) {
-
-        if (index > 0) {
-
-          cells[index - 1].focus();
-
-        } else {
-
-          cell.focus();
-        }
-
-        return;
-      }
-
-
-      if (index < cells.length - 1) {
-
-        cells[index + 1].focus();
-
-        return;
-      }
-
-
-      /*
-        Tab from the final cell creates a new row.
-      */
-
-      const lastRow =
-        table.querySelector(
-          "tbody tr:last-child"
-        );
-
-      if (!lastRow) {
-        return;
-      }
-
-      const columnCount =
-        lastRow.children.length;
-
-      const newRow =
-        document.createElement("tr");
-
-      for (
-        let i = 0;
-        i < columnCount;
-        i++
-      ) {
-
-        const newCell =
-          document.createElement("td");
-
-        newCell.contentEditable = "true";
-        newCell.tabIndex = 0;
-
-        newRow.appendChild(
-          newCell
-        );
-      }
-
-      table
-        .querySelector("tbody")
-        .appendChild(newRow);
-
-      const newCell =
-        newRow.querySelector("td");
-
-      if (newCell) {
-        newCell.focus();
-      }
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     CLEAR
-     ------------------------------------------------------- */
-
-  clearNotesButton.addEventListener(
-    "click",
-    () => {
-
-      notes.innerHTML = "";
-
-      savedRange = null;
-
-      notes.focus();
-    }
-  );
-
-
-  /* -------------------------------------------------------
-     PUBLIC API
-     ------------------------------------------------------- */
-
-  function clear() {
-
-    notes.innerHTML = "";
-
-    savedRange = null;
-  }
-
-
-  function getHTML() {
-    return notes.innerHTML;
-  }
-
-
-  return {
-    clear,
-    getHTML,
-    saveSelection,
-    restoreSelection
-  };
-}
-
-
-/* =========================================================
-   DOM REFERENCES
-   ========================================================= */
-
-const mainWorkspace =
-  document.getElementById(
-    "mainWorkspace"
-  );
-
-const tabs =
-  document.querySelectorAll(
-    ".tab"
-  );
-
-
-/* =========================================================
-   MAIN WHITEBOARD
-   ========================================================= */
-
-const mainBoard =
-  createWhiteboardWorkspace({
-
-    canvas:
-      document.getElementById("board"),
-
-    boardWrap:
-      document.getElementById("boardWrap"),
-
-    toolButtons:
-      document.querySelectorAll(
-        ".tool"
-      ),
-
-    colorInput:
-      document.getElementById(
-        "strokeColor"
-      ),
-
-    sizeInput:
-      document.getElementById(
-        "strokeSize"
-      ),
-
-    undoButton:
-      document.getElementById("undo"),
-
-    redoButton:
-      document.getElementById("redo"),
-
-    deleteButton:
-      document.getElementById(
-        "deleteSelected"
-      ),
-
-    clearButton:
-      document.getElementById(
-        "clearBoard"
-      ),
-
-    toolHelp:
-      document.getElementById(
-        "toolHelp"
-      ),
-
-    textEditor:
-      document.getElementById(
-        "textEditor"
-      ),
-
-    textInput:
-      document.getElementById(
-        "textInput"
-      ),
-
-    textAdd:
-      document.getElementById(
-        "textAdd"
-      ),
-
-    textCancel:
-      document.getElementById(
-        "textCancel"
-      ),
-
-    weightEditor:
-      document.getElementById(
-        "weightEditor"
-      ),
-
-    weightInput:
-      document.getElementById(
-        "weightInput"
-      ),
-
-    weightAdd:
-      document.getElementById(
-        "weightAdd"
-      ),
-
-    weightCancel:
-      document.getElementById(
-        "weightCancel"
-      ),
-
-    confirmEditor:
-      document.getElementById(
-        "confirmEditor"
-      ),
-
-    confirmMessage:
-      document.getElementById(
-        "confirmMessage"
-      ),
-
-    confirmYes:
-      document.getElementById(
-        "confirmYes"
-      ),
-
-    confirmNo:
-      document.getElementById(
-        "confirmNo"
-      )
-  });
-
-
-/* =========================================================
-   MAIN NOTEPAD
-   ========================================================= */
-
-const mainNotes =
-  createNotepadWorkspace({
-
-    notes:
-      document.getElementById(
-        "notes"
-      ),
-
-    insertTableButton:
-      document.getElementById(
-        "insertTable"
-      ),
-
-    clearNotesButton:
-      document.getElementById(
-        "clearNotes"
-      ),
-
-    tableEditor:
-      document.getElementById(
-        "tableEditor"
-      ),
-
-    tableRows:
-      document.getElementById(
-        "tableRows"
-      ),
-
-    tableColumns:
-      document.getElementById(
-        "tableColumns"
-      ),
-
-    tableInsert:
-      document.getElementById(
-        "tableInsert"
-      ),
-
-    tableCancel:
-      document.getElementById(
-        "tableCancel"
-      )
-  });
-
-
-/* =========================================================
-   BLANK WHITEBOARD
-   ========================================================= */
-
-const blankBoard =
-  createWhiteboardWorkspace({
-
-    canvas:
-      document.getElementById(
-        "blankBoard"
-      ),
-
-    boardWrap:
-      document.getElementById(
-        "blankBoardWrap"
-      ),
-
-    toolButtons:
-      document.querySelectorAll(
-        ".blank-tool"
-      ),
-
-    colorInput:
-      document.getElementById(
-        "blankStrokeColor"
-      ),
-
-    sizeInput:
-      document.getElementById(
-        "blankStrokeSize"
-      ),
-
-    undoButton:
-      document.getElementById(
-        "blankUndo"
-      ),
-
-    redoButton:
-      document.getElementById(
-        "blankRedo"
-      ),
-
-    deleteButton:
-      document.getElementById(
-        "blankDelete"
-      ),
-
-    clearButton:
-      document.getElementById(
-        "blankClearBoard"
-      ),
-
-    toolHelp:
-      document.getElementById(
-        "blankToolHelp"
-      ),
-
-    textEditor:
-      document.getElementById(
-        "blankTextEditor"
-      ),
-
-    textInput:
-      document.getElementById(
-        "blankTextInput"
-      ),
-
-    textAdd:
-      document.getElementById(
-        "blankTextAdd"
-      ),
-
-    textCancel:
-      document.getElementById(
-        "blankTextCancel"
-      ),
-
-    weightEditor:
-      document.getElementById(
-        "blankWeightEditor"
-      ),
-
-    weightInput:
-      document.getElementById(
-        "blankWeightInput"
-      ),
-
-    weightAdd:
-      document.getElementById(
-        "blankWeightAdd"
-      ),
-
-    weightCancel:
-      document.getElementById(
-        "blankWeightCancel"
-      ),
-
-    confirmEditor:
-      document.createElement("div"),
-
-    confirmMessage:
-      document.createElement("span"),
-
-    confirmYes:
-      document.createElement("button"),
-
-    confirmNo:
-      document.createElement("button")
-  });
-
-
-/*
-  The blank whiteboard does not need its own confirmation UI.
-  Its Clear Board button already performs the clear directly.
-*/
-
-
-/* =========================================================
-   BLANK NOTEPAD
-   ========================================================= */
-
-const blankNotes =
-  createNotepadWorkspace({
-
-    notes:
-      document.getElementById(
-        "blankNotes"
-      ),
-
-    insertTableButton:
-      document.getElementById(
-        "blankInsertTable"
-      ),
-
-    clearNotesButton:
-      document.getElementById(
-        "blankClearNotes"
-      ),
-
-    tableEditor:
-      document.getElementById(
-        "blankTableEditor"
-      ),
-
-    tableRows:
-      document.getElementById(
-        "blankTableRows"
-      ),
-
-    tableColumns:
-      document.getElementById(
-        "blankTableColumns"
-      ),
-
-    tableInsert:
-      document.getElementById(
-        "blankTableInsert"
-      ),
-
-    tableCancel:
-      document.getElementById(
-        "blankTableCancel"
-      )
-  });
-
-
-/* =========================================================
-   SPLIT VIEW
-   =========================================================
-
-   IMPORTANT:
-
-   Split View uses the actual existing whiteboard and
-   notepad elements.
-
-   We move those DOM elements into the split-view hosts
-   instead of creating copies.
-
-   Therefore:
-
-   Whiteboard tab -> same work
-   Notepad tab    -> same work
-   Split View     -> same work
-
-   Nothing gets duplicated or lost.
-   ========================================================= */
-
-const whiteboardSection =
-  document.getElementById(
-    "whiteboard"
-  );
-
-const notepadSection =
-  document.getElementById(
-    "notepad"
-  );
-
-const boardWrap =
-  document.getElementById(
-    "boardWrap"
-  );
-
-const notes =
-  document.getElementById(
-    "notes"
-  );
-
-const originalBoardParent =
-  boardWrap.parentElement;
-
-const originalNotesParent =
-  notes.parentElement;
-
-const splitBoardHost =
-  document.getElementById(
-    "splitBoardHost"
-  );
-
-const splitNotesHost =
-  document.getElementById(
-    "splitNotesHost"
-  );
-
-
-/*
-  The actual boardWrap and notes editor are moved into
-  Split View when needed.
-
-  Their content remains exactly the same.
-*/
-
-function enterSplitView() {
-
-  splitBoardHost.appendChild(
-    boardWrap
-  );
-
-  splitNotesHost.appendChild(
-    notes
-  );
-
-  requestAnimationFrame(() => {
-
-    mainBoard.resize();
-
-    mainNotes.restoreSelection();
-  });
-}
-
-
-function leaveSplitView() {
-
-  whiteboardSection.appendChild(
-    boardWrap
-  );
-
-  notepadSection.appendChild(
-    notes
-  );
-
-  requestAnimationFrame(() => {
-    mainBoard.resize();
-  });
-}
-
-
-/* =========================================================
-   SPLIT TABLE BUTTON
-   ========================================================= */
-
-document
-  .getElementById("splitInsertTable")
-  .addEventListener(
-    "click",
-    () => {
-
-      /*
-        The actual Insert Table button is reused.
-
-        First save the current cursor in the actual
-        notepad, then open the table editor.
-      */
-
-      mainNotes.saveSelection();
-
-      document
-        .getElementById("tableEditor")
-        .hidden = false;
-
-      document
-        .getElementById("tableRows")
-        .focus();
-
-      document
-        .getElementById("tableRows")
-        .select();
-    }
-  );
-
-
-document
-  .getElementById("splitClearNotes")
-  .addEventListener(
-    "click",
-    () => {
-      mainNotes.clear();
-    }
-  );
-
-
-/* =========================================================
-   TAB SWITCHING
-   ========================================================= */
-
-function setTab(tabName) {
-
-  /*
-    If leaving Split View, restore the original DOM
-    locations first.
-  */
-
-  if (tabName !== "split") {
-    leaveSplitView();
-  }
-
-
-  tabs.forEach(tab => {
-
-    tab.classList.toggle(
-      "active",
-      tab.dataset.tab === tabName
-    );
-  });
-
-
-  document
-    .querySelectorAll(".panel")
-    .forEach(panel => {
-      panel.classList.remove(
-        "active-panel"
-      );
-    });
-
-
-  if (tabName === "split") {
-
-    enterSplitView();
-
-    document
-      .getElementById("split")
-      .classList.add(
-        "active-panel"
-      );
-
-  } else {
-
-    document
-      .getElementById(tabName)
-      .classList.add(
-        "active-panel"
-      );
-  }
-
-
-  requestAnimationFrame(() => {
-
-    mainBoard.resize();
-
-    blankBoard.resize();
-  });
-}
-
-
-tabs.forEach(tab => {
-
-  tab.addEventListener(
-    "click",
-    () => {
-
-      setTab(
-        tab.dataset.tab
-      );
-    }
-  );
-});
-
-
-/* =========================================================
-   CLEAR ALL
-   ========================================================= */
-
-document
-  .getElementById("clearAll")
-  .addEventListener(
-    "click",
-    () => {
-
-      mainBoard.clear();
-
-      mainNotes.clear();
-    }
-  );
-
-
-/* =========================================================
-   DOWNLOAD WORK
-   =========================================================
-
-   Only the student's primary work is downloaded.
-
-   The separate Blank Split View is intentionally excluded.
-   ========================================================= */
-
-document
-  .getElementById("downloadAll")
-  .addEventListener(
-    "click",
-    () => {
-
-      mainBoard.downloadPNG(
-        "whiteboard.png"
-      );
-
-
-      const html =
-        `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Scratch Notes</title>
-<style>
-body {
-  font-family: system-ui, sans-serif;
-  padding: 24px;
-}
-table {
-  border-collapse: collapse;
-}
-td {
-  border: 1px solid #777;
-  min-width: 90px;
-  height: 32px;
-  padding: 5px 8px;
-  vertical-align: top;
-}
-</style>
-</head>
-<body>
-${mainNotes.getHTML()}
-</body>
-</html>`;
-
-
-      setTimeout(() => {
-
-        downloadText(
-          html,
-          "notes.html",
-          "text/html"
-        );
-
-      }, 150);
-    }
-  );
-
-
-/* =========================================================
-   WINDOW RESIZE
-   ========================================================= */
-
-window.addEventListener(
-  "resize",
-  () => {
-
-    mainBoard.resize();
-
-    blankBoard.resize();
-  }
-);
-
-
-/* =========================================================
-   ESCAPE
-   ========================================================= */
-
-document.addEventListener(
-  "keydown",
-  event => {
-
-    if (event.key !== "Escape") {
-      return;
-    }
-
-    document
-      .querySelectorAll(
-        ".floating-editor, .table-editor, .confirm-editor"
-      )
-      .forEach(editor => {
-        editor.hidden = true;
-      });
-  }
-);
-
-
-/* =========================================================
-   INITIAL RESIZE
-   ========================================================= */
-
-requestAnimationFrame(() => {
-
-  mainBoard.resize();
-
-  blankBoard.resize();
-});
+})();
