@@ -420,7 +420,7 @@
   function buildAccessibility(root, questionId) {
     root.innerHTML=`
       <h2>Accessibility</h2>
-      <p>These settings are shared across both question scratchpads so students do not have to configure the interface twice.</p>
+      <p>These settings are shared across both workspaces so students do not have to configure the interface twice.</p>
       <div class="accessibility-grid">
         <div class="accessibility-card">
           <h3>Text &amp; reading</h3>
@@ -488,7 +488,7 @@
   function buildHelp(root) {
     root.innerHTML=`
       <h2>How to Use</h2>
-      <p>Each exam question has its own completely independent scratchpad. Use the large <strong>Question 1</strong> and <strong>Question 2</strong> tabs at the top to switch between them.</p>
+      <p>There are two completely independent workspaces. Use the large <strong>Workspace 1</strong> and <strong>Workspace 2</strong> buttons at the top to switch between them.</p>
       <h3>Whiteboard</h3>
       <ul>
         <li><strong>Select:</strong> select a node, edge, stroke, or text object before editing or deleting it.</li>
@@ -508,13 +508,13 @@
       </ul>
       <h3>Split views</h3>
       <ul>
-        <li><strong>Split View</strong> shows the same whiteboard and notepad for the current question side by side. All controls remain available.</li>
-        <li><strong>Blank Split View</strong> is a second blank whiteboard/notepad pair inside that question. It stays independent from the main work during the current session.</li>
+        <li><strong>Split View</strong> shows the same whiteboard and notepad side by side. All controls remain available.</li>
+        <li><strong>Blank Split View</strong> is a second blank whiteboard/notepad pair inside that workspace. It stays independent from the main work during the current session.</li>
       </ul>
       <h3>Accessibility</h3>
       <p>The Accessibility tab includes text size, node size, edge thickness, dark mode, high contrast, a colorblind-friendly palette, a dyslexia-friendly font, extra text spacing, and focus mode. Accessibility settings apply to both question tabs.</p>
       <h3>Download</h3>
-      <p><strong>Download Work</strong> downloads the main whiteboard and notepad for both Question 1 and Question 2. Blank Split View is intentionally not included.</p>
+      <p><strong>Download Work</strong> downloads the main whiteboard and notepad for both Workspace 1 and Workspace 2. Blank Split View is intentionally not included.</p>
       <p class="notice"><strong>Nothing is saved automatically.</strong> Closing or refreshing the browser clears the work. The site does not use localStorage, sessionStorage, IndexedDB, cookies, analytics, a backend, or collaboration features.</p>`;
   }
 
