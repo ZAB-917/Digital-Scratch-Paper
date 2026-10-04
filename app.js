@@ -204,7 +204,7 @@
     const wrap = document.createElement("div"); wrap.className="canvas-wrap";
     const canvas = document.createElement("canvas"); canvas.className="board-canvas"; canvas.setAttribute("aria-label",ariaLabel); wrap.appendChild(canvas);
     root.append(toolbar,wrap);
-    const ctx=canvas.getContext("2d"); let drawing=null;
+    const ctx=canvas.getContext("2d"); let drawing=null; let drag=null;
 
     function selectFromLocal() {}
     function snap(){return JSON.stringify(state.objects);}
@@ -260,17 +260,122 @@
 
     canvas.addEventListener("dblclick",e=>{if(state.tool!=="select")return;const h=hit(point(e));if(h?.type==="node"){state.selectedId=h.id;editLabel.click();}});
     canvas.addEventListener("pointerdown",e=>{
-      if(e.pointerType==="mouse"&&e.button!==0)return;canvas.setPointerCapture?.(e.pointerId);const p=point(e);
-      if(state.tool==="select"){state.selectedId=hit(p)?.id||null;draw();return;}
+      if(e.pointerType==="mouse"&&e.button!==0)return;
+      canvas.setPointerCapture?.(e.pointerId);
+      const p=point(e);
+
+      if(state.tool==="select"){
+        const h=hit(p);
+        state.selectedId=h?.id||null;
+        drag=null;
+
+        if(h?.type==="node"){
+          drag={
+            pointerId:e.pointerId,
+            kind:"node",
+            before:snap(),
+            start:p,
+            moved:false,
+            nodeId:h.id,
+            nodeStart:{x:h.x,y:h.y}
+          };
+        }else if(h?.type==="edge"){
+          const a=node(h.from),b=node(h.to);
+          if(a&&b){
+            drag={
+              pointerId:e.pointerId,
+              kind:"edge",
+              before:snap(),
+              start:p,
+              moved:false,
+              fromId:a.id,
+              toId:b.id,
+              fromStart:{x:a.x,y:a.y},
+              toStart:{x:b.x,y:b.y}
+            };
+          }
+        }
+        draw();
+        return;
+      }
+
       if(state.tool==="node"){const before=snap();state.objects.push({id:uid(),type:"node",x:p.x,y:p.y,label:nextLabel(),color:state.nodeColor,size:state.nodeSize});commit(before);return;}
       if(state.tool==="edge"||state.tool==="directed"){const h=hit(p);if(h?.type!=="node"){status.textContent="Choose a node.";return;}if(!state.edgeStart){state.edgeStart=h.id;state.selectedId=h.id;draw();}else if(state.edgeStart!==h.id){const before=snap();state.objects.push({id:uid(),type:"edge",from:state.edgeStart,to:h.id,directed:state.tool==="directed",color:state.edgeColor,size:state.edgeSize});state.edgeStart=null;state.selectedId=null;commit(before);}return;}
       if(state.tool==="weight"){const h=hit(p);if(h?.type==="edge"){state.selectedId=h.id;showDialog({title:"Edge Weight",labelText:"Weight",value:h.weight||"",onConfirm:v=>{const before=snap();h.weight=v.trim();commit(before);}});}return;}
       if(state.tool==="text"){showDialog({title:"Add Text",labelText:"Text",onConfirm:v=>{if(v.trim()){const before=snap();state.objects.push({id:uid(),type:"text",x:p.x,y:p.y,text:v.trim(),color:state.drawColor,size:20});commit(before);}}});return;}
       if(state.tool==="pen"||state.tool==="eraser"){drawing={before:snap(),erase:state.tool==="eraser",points:[p]};if(!drawing.erase)state.objects.push({id:uid(),type:"stroke",points:drawing.points,color:state.drawColor,size:state.penSize});}
     });
-    canvas.addEventListener("pointermove",e=>{if(!drawing)return;const p=point(e);if(drawing.erase){const h=hit(p);if(h){state.objects=state.objects.filter(o=>o.id!==h.id);if(h.type==="node")state.objects=state.objects.filter(o=>!(o.type==="edge"&&(o.from===h.id||o.to===h.id)));}}else{const s=state.objects.at(-1);if(s?.type==="stroke")s.points.push(p);}draw();});
-    canvas.addEventListener("pointerup",()=>{if(!drawing)return;const before=drawing.before;drawing=null;commit(before);});
-    canvas.addEventListener("pointercancel",()=>drawing=null);
+
+    canvas.addEventListener("pointermove",e=>{
+      const p=point(e);
+
+      if(drag&&e.pointerId===drag.pointerId){
+        const rawDx=p.x-drag.start.x,rawDy=p.y-drag.start.y;
+        if(!drag.moved&&Math.hypot(rawDx,rawDy)<4)return;
+        drag.moved=true;
+        const bounds=canvas.getBoundingClientRect();
+
+        if(drag.kind==="node"){
+          const n=node(drag.nodeId);
+          if(n){
+            const r=(n.size||state.nodeSize)/2;
+            n.x=Math.max(r,Math.min(bounds.width-r,drag.nodeStart.x+rawDx));
+            n.y=Math.max(r,Math.min(bounds.height-r,drag.nodeStart.y+rawDy));
+          }
+        }else if(drag.kind==="edge"){
+          const a=node(drag.fromId),b=node(drag.toId);
+          if(a&&b){
+            const ar=(a.size||state.nodeSize)/2,br=(b.size||state.nodeSize)/2;
+            const minDx=Math.max(ar-drag.fromStart.x,br-drag.toStart.x);
+            const maxDx=Math.min(bounds.width-ar-drag.fromStart.x,bounds.width-br-drag.toStart.x);
+            const minDy=Math.max(ar-drag.fromStart.y,br-drag.toStart.y);
+            const maxDy=Math.min(bounds.height-ar-drag.fromStart.y,bounds.height-br-drag.toStart.y);
+            const dx=Math.max(minDx,Math.min(maxDx,rawDx));
+            const dy=Math.max(minDy,Math.min(maxDy,rawDy));
+            a.x=drag.fromStart.x+dx;a.y=drag.fromStart.y+dy;
+            b.x=drag.toStart.x+dx;b.y=drag.toStart.y+dy;
+          }
+        }
+        draw();
+        return;
+      }
+
+      if(!drawing)return;
+      if(drawing.erase){
+        const h=hit(p);
+        if(h){
+          state.objects=state.objects.filter(o=>o.id!==h.id);
+          if(h.type==="node")state.objects=state.objects.filter(o=>!(o.type==="edge"&&(o.from===h.id||o.to===h.id)));
+        }
+      }else{
+        const s=state.objects.at(-1);
+        if(s?.type==="stroke")s.points.push(p);
+      }
+      draw();
+    });
+
+    canvas.addEventListener("pointerup",e=>{
+      if(drag&&e.pointerId===drag.pointerId){
+        const finished=drag;
+        drag=null;
+        if(finished.moved)commit(finished.before);
+        else draw();
+        return;
+      }
+      if(!drawing)return;
+      const before=drawing.before;
+      drawing=null;
+      commit(before);
+    });
+
+    canvas.addEventListener("pointercancel",e=>{
+      if(drag&&e.pointerId===drag.pointerId){
+        const before=drag.before;
+        drag=null;
+        restore(before);
+      }
+      drawing=null;
+    });
 
     setTool("select");
 
