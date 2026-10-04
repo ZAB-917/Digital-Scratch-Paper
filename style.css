@@ -339,3 +339,8 @@ body.extra-spacing .info-panel { line-height: 2; letter-spacing: .035em; word-sp
   .canvas-wrap, .notes-editor { min-height: 430px; }
   .toolbar-group { border-right: 0; padding-right: 0; }
 }
+
+/* Never display elements that JavaScript/HTML has marked as hidden. */
+[hidden] {
+  display: none !important;
+}
